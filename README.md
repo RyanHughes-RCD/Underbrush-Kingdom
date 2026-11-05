@@ -25,7 +25,15 @@ A phone-first web game about a band of tiny heroes living in the underbrush. Col
    - Enchanter's Hut: pebbles → **crystals** (Quartz, Amethyst, Garnet … Prismheart)
 
    A batch holds up to 3 pieces of scrap. Each scrap has a **value**, and the batch's total value sets the odds. Tier 1 is always the likeliest, and more value makes rarer tiers likelier. Each scrap also has a highest tier it can ever reach; bottle caps, twigs and pebbles top out at tier 4. With 3 bottle caps the odds are about 50% Iron, 35% Copper, 12% Bronze and 2% Steel. The workshop shows the odds before you commit, and the result is revealed when the batch finishes. Materials you haven't found yet show as "?".
-5. **Craft weapons.** Each class has two weapon types: Archer Lizards use the **Longbow** or **Recurve Bow**, Beetle Knights the **Sword** or **Mace**, and Wizard Mice the **Staff** or **Tome**. A weapon takes 3 of one material (an Oak Longbow, a Steel Mace, an Amethyst Tome). Its attack and scaling come from the weapon type and the material (see Stats below). Equip one to raise a fighter's power…
+5. **Craft weapons.** Each class has two weapon types: Archer Lizards use the **Longbow** or **Recurve Bow**, Beetle Knights the **Sword** or **Mace**, and Wizard Mice the **Staff** or **Tome**. Each weapon is made of two materials, a **main material** (2 needed) and **fittings** (1 needed) from a second family:
+
+   | Class | Main material | Fittings | Example |
+   |---|---|---|---|
+   | Archer Lizard | Wood | Metal | Iron-bound Oak Longbow |
+   | Beetle Knight | Metal | Crystal | Garnet-set Steel Mace |
+   | Wizard Mouse | Crystal | Wood | Oak-handled Amethyst Tome |
+
+   You need two workshops' output for every weapon. Its attack and scaling come from the weapon type and both materials (see Stats below). Equip one to raise a fighter's power…
 6. **…or lure a recruit.** Leave a weapon at the **Lure Post** and, after a while, a new fighter of that class wanders in to claim it.
 
 Fighters gain XP for every encounter their party wins, and level up over time.
@@ -45,7 +53,7 @@ Weapons have a base **attack** and **scaling** grades (S to E) for the stats the
 | Wizard Mouse | Staff | 7 | INT, SPI | Strong from the start |
 | Wizard Mouse | Tome | 5 | INT, SPI (heavily) | Catches up by level 5 |
 
-A weapon's material sets its **quality**, from ×1.0 at tier 1 to ×3.5 at tier 10, which multiplies both attack and scaling. Damage = quality × (attack + Σ scaling × the wielder's stat), so the same weapon hits harder as its fighter levels up. A fighter's **power** on expeditions combines damage, defensive stats and HP. All the numbers live in `js/data.js`, and the formulas are in `js/stats.js`.
+Each material has a **quality**, from ×1.0 at tier 1 to ×3.5 at tier 10. A weapon's quality is (2 × main + fittings) ÷ 3, and it multiplies both attack and scaling. Damage = quality × (attack + Σ scaling × the wielder's stat), so the same weapon hits harder as its fighter levels up. A fighter's **power** on expeditions combines damage, defensive stats and HP. All the numbers live in `js/data.js`, and the formulas are in `js/stats.js`.
 
 At the top of the Camp tab, any fighter not away on an expedition wanders a grassy clearing ringed by trees. They squish and stretch as they go. Tap one to open their details. The trees and grass are drawn in code, so there are no image files for them.
 
@@ -91,7 +99,7 @@ npm test
 Character art is edited in the **[Sprite Workshop](https://claude.ai/artifact/SGtaz1YMDs5cTKcVrUjBFR)**, a pixel editor that saves to shared storage. Its source is `tools/sprite-workshop.html`.
 
 - **Bodies** (one per class) have named **anchor points**: `hand`, `offhand`, `head`, `chest`, `back`, or any name you add.
-- **Weapons** have one design per type (six in all). A design is a shared shape plus the palette colours that **change with the material** (marked with a dot). Pick any of the family's 10 materials to see and edit it:
+- **Weapons** have one design per type (six in all). A design is a shared shape whose palette colours are each **fixed**, follow the **main material** (round dot) or follow the **fittings** (square dot). Pick any main material and fittings to see and edit that combination. Fittings colours you set are saved per fittings material. Each main material is one of:
   - **automatic:** the shared shape, recoloured from the material's palette.
   - **colours:** the shared shape with colours you picked for that material, like the Pine, Oak and Ashwood Longbows.
   - **design:** the material has its own drawing, for tiers that need more than a palette swap.

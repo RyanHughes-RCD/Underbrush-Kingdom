@@ -66,6 +66,13 @@ test('a new fighter is about 3 power bare-handed and stronger armed', () => {
   }
 });
 
+test('weapon quality: main material counts double, fittings once', () => {
+  const p = weaponProfile('sword', 'godsbane', 'quartz');
+  assert.equal(p.quality, Math.round(((2 * 3.5 + 1.0) / 3) * 100) / 100);
+  assert.ok(weaponProfile('sword', 'iron', 'prismheart').quality < weaponProfile('sword', 'godsbane', 'quartz').quality);
+  assert.ok(weaponProfile('sword', 'iron', 'garnet').attack >= weaponProfile('sword', 'iron', 'quartz').attack);
+});
+
 test('grades', () => {
   assert.equal(gradeOf(1.2), 'S');
   assert.equal(gradeOf(0.45), 'C');

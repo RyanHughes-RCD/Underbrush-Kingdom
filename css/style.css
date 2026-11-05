@@ -276,3 +276,22 @@ button { font-family: inherit; font-size: inherit; color: inherit; }
 .up { color: var(--good); font-weight: 600; } .down { color: var(--warn); font-weight: 600; }
 .stack-list { display: flex; flex-direction: column; gap: 8px; margin: 8px 0; }
 .modal .hint, .card .hint { color: var(--ink-soft); }
+
+/* ---------- Weapon bench ---------- */
+.seg { display: grid; grid-template-columns: 1fr 1fr; border: 2px solid var(--line); border-radius: 6px; overflow: hidden; margin-bottom: 8px; }
+.seg button { background: var(--panel-2); border: 0; padding: 8px; font-weight: 600; cursor: pointer; min-height: 40px; }
+.seg button + button { border-left: 2px solid var(--line); }
+.seg button.on { background: var(--ink); color: var(--panel); }
+.bench-label { margin: 6px 0 4px; }
+.mchips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
+.mchip {
+  flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 0; padding: 4px 8px; min-width: 64px;
+  background: var(--panel-2); border: 2px solid var(--line); border-radius: 6px; font-size: 12px; cursor: pointer; line-height: 1.15;
+}
+.mchip img { width: 24px; height: 24px; }
+.mchip i { font-style: normal; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.mchip.on { background: #f0c46a; box-shadow: inset 0 0 0 2px #fff7e6; }
+.mchip.short i { color: var(--warn); }
+.bench-preview { display: flex; gap: 10px; align-items: center; margin: 8px 0; padding: 8px; background: var(--panel-2); border: 2px dashed #b9a77d; border-radius: 6px; }
+.bench-art { width: 56px; height: 64px; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.bench-art img { max-height: 64px; width: auto !important; }

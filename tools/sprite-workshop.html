@@ -111,7 +111,8 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; width: 100%; }
 .new-form { display: grid; gap: 8px; }
 .empty { padding: 30px 12px; text-align: center; color: var(--parch-dim); }
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--parch); color: var(--moss); padding: 8px 14px; border-radius: 6px; font-weight: 700; z-index: 5; max-width: calc(100% - 32px); }
-.swatch.swap { position: relative; }
+.swatch.swap, .swatch.acc { position: relative; }
+.swatch.acc::after { content: ""; position: absolute; right: -4px; top: -4px; width: 9px; height: 9px; border-radius: 2px; background: var(--a-offhand); border: 2px solid var(--moss); }
 .swatch.swap::after { content: ""; position: absolute; right: -4px; top: -4px; width: 9px; height: 9px; border-radius: 50%; background: var(--amber); border: 2px solid var(--moss); }
 .mat-chips { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
 .mat-chip { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 2px; border-radius: 6px; border: 1px solid var(--line); background: var(--board); font-size: 11px; min-width: 0; }
@@ -119,6 +120,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; width: 100%; }
 .mat-chip span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .mat-chip.sel { border-color: var(--amber); background: var(--bench); }
 .mat-chip i { font-style: normal; font-family: var(--mono); font-size: 10px; color: var(--parch-dim); }
+.mat-chips.small .mat-chip canvas { width: 24px; height: 24px; }
 .mat-chip i.design { color: var(--amber); } .mat-chip i.recolour { color: var(--ok); }
 .shelf-sub { font-family: var(--mono); font-size: 11px; color: var(--parch-dim); margin: 4px 0 0 2px; }
 .copyline { font-family: var(--mono); font-size: 12px; background: var(--moss); border: 1px solid var(--line); padding: 6px 8px; border-radius: 5px; user-select: all; }
@@ -168,7 +170,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; width: 100%; }
         <span>New colour</span><input type="color" id="pal-new" value="#e9ac4a"><button class="btn sm" id="pal-add">Add</button>
         <button class="btn sm" id="pal-tidy" title="Remove colours no pixel uses">Remove unused</button>
       </div>
-      <label class="palette-edit" id="swap-row" hidden><input type="checkbox" id="pal-swap"> <span id="swap-label">Selected colour changes with the material</span></label>
+      <label class="palette-edit" id="swap-row" hidden><span>Selected colour</span><select id="pal-role" class="txt"></select> <span id="swap-label" class="hint"></span></label>
     </div>
     <div class="row">
       <label class="btn sm" for="file-png" style="display:inline-flex;align-items:center">Import PNG…</label>
@@ -189,6 +191,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; width: 100%; }
       <div class="row">
         <label class="field">Weapon<select id="pv-weapon"></select></label>
         <label class="field">Material<select id="pv-mat"></select></label>
+        <label class="field">Fittings<select id="pv-acc"></select></label>
       </div>
       <div class="row">
         <label class="row" style="gap:4px;font-size:13px"><input type="checkbox" id="pv-squish" checked> Squish</label>
@@ -207,16 +210,17 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; width: 100%; }
 const CHARS = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const PAD = 8;
 const CLASSES = { archer: 'Archer Lizard', knight: 'Beetle Knight', mage: 'Wizard Mouse' };
-// Mirrors the game's js/data.js: two weapon types per class, and each
+// Mirrors the game's js/data.js: two weapon types per class (each made of
+// a main material and a fittings material from a second family), and each
 // family's ten materials with the [dark, mid, light] tones used for
 // automatic recolours. Keep these in step with data.js.
 const WEAPON_TYPES = {
-  longbow: { name: 'Longbow', cls: 'archer', family: 'wood' },
-  recurve: { name: 'Recurve Bow', cls: 'archer', family: 'wood' },
-  sword: { name: 'Sword', cls: 'knight', family: 'metal' },
-  mace: { name: 'Mace', cls: 'knight', family: 'metal' },
-  staff: { name: 'Staff', cls: 'mage', family: 'crystal' },
-  tome: { name: 'Tome', cls: 'mage', family: 'crystal' },
+  longbow: { name: 'Longbow', cls: 'archer', family: 'wood', accent: 'metal' },
+  recurve: { name: 'Recurve Bow', cls: 'archer', family: 'wood', accent: 'metal' },
+  sword: { name: 'Sword', cls: 'knight', family: 'metal', accent: 'crystal' },
+  mace: { name: 'Mace', cls: 'knight', family: 'metal', accent: 'crystal' },
+  staff: { name: 'Staff', cls: 'mage', family: 'crystal', accent: 'wood' },
+  tome: { name: 'Tome', cls: 'mage', family: 'crystal', accent: 'wood' },
 };
 const FAMILIES = {
   wood: [['pine', 'Pine', '#5c3b1e', '#b07a43', '#e3b77a'], ['oak', 'Oak', '#3e2712', '#7d5128', '#b88552'], ['ashwood', 'Ashwood', '#6b6150', '#b9ad92', '#e8dfc8'], ['ironwood', 'Ironwood', '#2a2a2e', '#56585e', '#8e9098'], ['heartwood', 'Heartwood', '#4a1a10', '#9a3f22', '#d77b4c'], ['thornwood', 'Thornwood', '#1f2a14', '#4a5c2a', '#8fa055'], ['moonwood', 'Moonwood', '#5a6478', '#b8c3d6', '#f1f5ff'], ['elderwood', 'Elderwood', '#2c1d3a', '#6a4a7d', '#b58fc4'], ['worldroot', 'Worldroot', '#2b2014', '#6b5a3a', '#a8c070'], ['godwood', 'Godwood', '#6b4a12', '#e6c25a', '#fff6cf']],
@@ -225,6 +229,7 @@ const FAMILIES = {
 };
 const MATERIALS = {};
 for (const [fam, list] of Object.entries(FAMILIES)) list.forEach(([id, name, d, m, l], i) => { MATERIALS[id] = { id, name, family: fam, tier: i + 1, tones: [d, m, l] }; });
+const cap = (x) => x[0].toUpperCase() + x.slice(1);
 const ANCHOR_NAMES = ['hand', 'offhand', 'head', 'chest', 'back'];
 const SLOTS = ['head', 'body', 'back', 'offhand', 'weapon', 'other'];
 const KINDS = ['bodies', 'weapons', 'pieces'];
@@ -235,17 +240,18 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
 
 // ---------- State ----------
 let sheet = { version: 2, bodies: {}, weapons: {}, pieces: {} };
-let sel = null;                 // {kind, id} — weapons also carry {mat}
+let sel = null;                 // {kind, id} — weapons also carry {mat, acc}
 let tool = 'pencil';
 let color = 0;                  // palette index; -1 = transparent
 let activeAnchor = 'hand';
 let pvBody = 'archer';
-let pvEquip = null;             // {type, material} or null
+let pvEquip = null;             // {type, material, accent} or null
 let db = null, canWrite = true, loaded = false;
 const dirty = new Map();        // "kind/id" -> timer
 const writing = new Set();
 const history = new Map();      // "kind/id" -> {undo: [], redo: []}
-const lastMat = {};             // weapon type -> last material edited
+const lastMat = {};             // weapon type -> last main material edited
+const lastAcc = {};             // weapon type -> last fittings material edited
 let ui = { newOpen: false, confirmDelete: false, confirmShared: false };
 
 const key = (s = sel) => `${s.kind}/${s.id}`;
@@ -261,31 +267,47 @@ function cur(s = sel) {
 }
 
 // ---------- Weapon colours (same rules as js/sprites.js) ----------
+// Each colour of a weapon is fixed, follows the main material (`swaps`) or
+// follows the fittings material (`accentSwaps`). Fittings colours live on
+// whatever holds the pixels: the shared design or a material's own design.
 function lum(hex) { const n = parseInt(hex.slice(1), 16); return 0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255); }
-function autoColors(d, mat) {
-  const tones = MATERIALS[mat]?.tones; const swaps = d.swaps || [];
-  if (!tones || !swaps.length) return {};
-  const order = [...swaps].sort((a, b) => lum(d.palette[a]) - lum(d.palette[b]));
+function autoColors(pal, swaps, mat) {
+  const tones = MATERIALS[mat]?.tones;
+  if (!tones || !swaps?.length) return {};
+  const order = [...swaps].sort((a, b) => lum(pal[a]) - lum(pal[b]));
   const out = {};
   order.forEach((idx, i) => { out[idx] = tones[order.length === 1 ? 1 : Math.round((i / (order.length - 1)) * 2)]; });
   return out;
 }
-function weaponSprite(type, mat) {
+const applyColors = (pal, colors) => pal.map((c, i) => colors[i] || c);
+function holderOf(type, mat) { const d = sheet.weapons[type]; const v = variantOf(d, mat); return v?.pixels ? v : d; }
+function weaponSprite(type, mat, acc) {
   const d = sheet.weapons[type]; if (!d) return null;
-  const v = variantOf(d, mat);
-  const base = { slot: 'weapon', anchor: d.anchor, layer: d.layer };
-  if (v?.pixels) return { ...base, w: v.w, h: v.h, pixels: v.pixels, palette: v.palette, pivot: v.pivot || d.pivot };
-  const colors = { ...autoColors(d, mat), ...(v?.colors || {}) };
-  return { ...base, w: d.w, h: d.h, pixels: d.pixels, pivot: d.pivot, palette: d.palette.map((c, i) => colors[i] || c) };
+  const v = variantOf(d, mat); const holder = v?.pixels ? v : d;
+  let pal = holder === v ? [...v.palette] : applyColors(d.palette, { ...autoColors(d.palette, d.swaps, mat), ...(v?.colors || {}) });
+  if (acc) pal = applyColors(pal, { ...autoColors(holder.palette, holder.accentSwaps, acc), ...(holder.accents?.[acc]?.colors || {}) });
+  return { slot: 'weapon', anchor: d.anchor, layer: d.layer, w: holder.w, h: holder.h, pixels: holder.pixels, pivot: holder.pivot || d.pivot, palette: pal };
 }
 function variantKind(type, mat) {
   const v = variantOf(sheet.weapons[type], mat);
   return v?.pixels ? 'design' : v?.colors && Object.keys(v.colors).length ? 'recolour' : 'auto';
 }
+function accentKind(type, mat, acc) {
+  const h = holderOf(type, mat);
+  return h.accents?.[acc]?.colors && Object.keys(h.accents[acc].colors).length ? 'recolour' : 'auto';
+}
 const KIND_LABEL = { design: 'own design', recolour: 'recoloured', auto: 'automatic' };
+// What a colour of the selected weapon follows: 'main', 'accent' or 'fixed'.
+function roleOf(i) {
+  if (!isWeapon()) return 'fixed';
+  const h = cur();
+  if ((h.accentSwaps || []).includes(i)) return 'accent';
+  if (!ownDesign() && (doc().swaps || []).includes(i)) return 'main';
+  return 'fixed';
+}
 // The palette shown and painted with: a weapon's material colours applied.
-function palette(s = sel) { return isWeapon(s) ? weaponSprite(s.id, s.mat).palette : cur(s).palette; }
-function display(s = sel) { return isWeapon(s) ? weaponSprite(s.id, s.mat) : cur(s); }
+function palette(s = sel) { return isWeapon(s) ? weaponSprite(s.id, s.mat, s.acc).palette : cur(s).palette; }
+function display(s = sel) { return isWeapon(s) ? weaponSprite(s.id, s.mat, s.acc) : cur(s); }
 
 // ---------- Pixels ----------
 function toIdx(sp) {
@@ -315,7 +337,7 @@ function thumb(canvas, sp) {
 // Same rules as the game's js/sprites.js layout().
 function layout(cls, equipped) {
   const body = sheet.bodies[cls]; if (!body) return [];
-  const eq = equipped.map((e) => (typeof e === 'string' ? (sheet.pieces[e] ? [e, sheet.pieces[e]] : null) : [`${e.type}:${e.material}`, weaponSprite(e.type, e.material)])).filter((x) => x && x[1]);
+  const eq = equipped.map((e) => (typeof e === 'string' ? (sheet.pieces[e] ? [e, sheet.pieces[e]] : null) : [`${e.type}:${e.material}+${e.accent}`, weaponSprite(e.type, e.material, e.accent)])).filter((x) => x && x[1]);
   const slots = new Set(eq.map(([, p]) => p.slot)); const ids = new Set(eq.map(([id]) => id));
   const worn = Object.entries(sheet.pieces).filter(([id, p]) => (p.wornBy || []).includes(cls) && !slots.has(p.slot) && !ids.has(id));
   const parts = [...worn, ...eq].map(([id, p]) => {
@@ -402,7 +424,10 @@ function renderShelfThumbs() {
   document.querySelectorAll('.shelf-item').forEach((b) => {
     const kind = b.dataset.kind, id = b.dataset.id;
     let sp;
-    if (kind === 'weapons') sp = weaponSprite(id, isWeapon() && sel.id === id ? sel.mat : (lastMat[id] || FAMILIES[WEAPON_TYPES[id].family][0][0]));
+    if (kind === 'weapons') {
+      const mine = isWeapon() && sel.id === id;
+      sp = weaponSprite(id, mine ? sel.mat : (lastMat[id] || FAMILIES[WEAPON_TYPES[id].family][0][0]), mine ? sel.acc : (lastAcc[id] || FAMILIES[WEAPON_TYPES[id].accent][0][0]));
+    }
     else sp = sheet[kind][id];
     if (sp) thumb(b.querySelector('canvas'), sp);
   });
@@ -423,7 +448,7 @@ function drawBoard() {
   const sp = cur(); const c = $('#board'); const ctx = c.getContext('2d');
   if (!sp) { $('#board-title').textContent = '—'; c.width = c.height = 10; return; }
   const d = doc();
-  $('#board-title').textContent = isWeapon() ? `${MATERIALS[sel.mat].name} ${d.name || WEAPON_TYPES[sel.id].name}` : (sp.name || sel.id);
+  $('#board-title').textContent = isWeapon() ? `${MATERIALS[sel.mat].name} ${d.name || WEAPON_TYPES[sel.id].name} · ${MATERIALS[sel.acc].name} fittings` : (sp.name || sel.id);
   const wrap = $('#board-wrap');
   const avail = Math.max(200, wrap.clientWidth - 26);
   boardZoom = Math.max(6, Math.min(24, Math.floor(Math.min(avail, 640) / Math.max(sp.w, sp.h))));
@@ -472,20 +497,23 @@ function renderPalette() {
   if (!sp) { el.innerHTML = ''; return; }
   const pal = palette();
   if (color >= pal.length) color = pal.length - 1;
-  const swaps = isWeapon() && !ownDesign() ? new Set(doc().swaps || []) : new Set();
   el.innerHTML = `<button class="swatch clear ${color < 0 ? 'sel' : ''}" data-color="-1" title="Transparent"></button>` +
-    pal.map((h, i) => `<button class="swatch ${i === color ? 'sel' : ''} ${swaps.has(i) ? 'swap' : ''}" data-color="${i}" style="background:${h}" title="${h}${swaps.has(i) ? ' · changes with material' : ''}"></button>`).join('');
+    pal.map((h, i) => { const r = roleOf(i); return `<button class="swatch ${i === color ? 'sel' : ''} ${r === 'main' ? 'swap' : r === 'accent' ? 'acc' : ''}" data-color="${i}" style="background:${h}" title="${h}${r === 'main' ? ' · follows the main material' : r === 'accent' ? ' · follows the fittings' : ''}"></button>`; }).join('');
   $('#pal-edit').disabled = color < 0;
   if (color >= 0) $('#pal-edit').value = pal[color];
   $('#pal-add').disabled = pal.length >= CHARS.length;
   const row = $('#swap-row');
-  row.hidden = !(isWeapon() && !ownDesign());
+  row.hidden = !isWeapon();
   if (!row.hidden) {
-    $('#pal-swap').disabled = color < 0;
-    $('#pal-swap').checked = swaps.has(color);
-    $('#swap-label').textContent = color < 0 ? 'Pick a colour to choose whether it changes with the material'
-      : swaps.has(color) ? `Changes with the material: editing it recolours ${MATERIALS[sel.mat].name} only`
-      : 'Shared by every material: editing it changes all of them (tick to make it change with the material)';
+    const r = color < 0 ? 'fixed' : roleOf(color);
+    const mainName = MATERIALS[sel.mat].name, accName = MATERIALS[sel.acc].name;
+    const opts = [['fixed', 'is fixed'], ...(ownDesign() ? [] : [['main', `follows the main material (${mainName})`]]), ['accent', `follows the fittings (${accName})`]];
+    $('#pal-role').innerHTML = opts.map(([v, t]) => `<option value="${v}" ${v === r ? 'selected' : ''}>${t}</option>`).join('');
+    $('#pal-role').disabled = color < 0;
+    $('#swap-label').textContent = color < 0 ? 'Pick a colour first.'
+      : r === 'main' ? `Editing it recolours ${mainName} only.`
+      : r === 'accent' ? `Editing it recolours ${accName} fittings only.`
+      : ownDesign() ? `Part of ${mainName}'s own design.` : 'Shared by every material: editing it changes all of them.';
   }
 }
 
@@ -514,7 +542,7 @@ function renderProps() {
     const d = doc(); const t = WEAPON_TYPES[sel.id]; const m = MATERIALS[sel.mat]; const kind = variantKind(sel.id, sel.mat);
     const anchorOpts = new Set([...ANCHOR_NAMES, ...Object.values(sheet.bodies).flatMap((b) => Object.keys(b.anchors || {}))]);
     const explain = {
-      auto: `${m.name} uses the shared ${esc(d.name)} shape with automatic colours from ${m.name}'s palette. Change a colour marked with a dot to give ${m.name} its own recolour.`,
+      auto: `${m.name} uses the shared ${esc(d.name)} shape with automatic colours from ${m.name}'s palette. Change a colour marked with a round dot to give ${m.name} its own recolour; square dots follow the fittings.`,
       recolour: `${m.name} uses the shared ${esc(d.name)} shape with its own colours. Drawing changes the shape for every material that doesn't have its own design.`,
       design: `${m.name} has its own design. Drawing here only changes the ${m.name} ${esc(d.name)}.`,
     }[kind];
@@ -525,11 +553,17 @@ function renderProps() {
         <span class="hint">Materials (${FAMILIES[t.family].filter(([mm]) => variantKind(sel.id, mm) !== 'auto').length}/10 set)</span>
         <div class="mat-chips">${FAMILIES[t.family].map(([mm, name], i) => { const k = variantKind(sel.id, mm); return `<button class="mat-chip ${mm === sel.mat ? 'sel' : ''}" data-mat="${mm}" title="${esc(name)} · tier ${i + 1} · ${KIND_LABEL[k]}"><canvas width="1" height="1"></canvas><span>${esc(name)}</span><i class="${k}">${k === 'design' ? 'design' : k === 'recolour' ? 'colours' : 'auto'}</i></button>`; }).join('')}</div>
       </div>
-      <div class="role"><b>${esc(m.name)} ${esc(d.name)}</b> · tier ${m.tier} · ${KIND_LABEL[kind]}</div>
+      <div class="stack" style="gap:6px">
+        <span class="hint">Fittings: ${esc(cap(t.accent))} (${FAMILIES[t.accent].filter(([aa]) => accentKind(sel.id, sel.mat, aa) !== 'auto').length}/10 set${ownDesign() ? ` for ${esc(m.name)}'s design` : ''})</span>
+        <div class="mat-chips small">${FAMILIES[t.accent].map(([aa, name], i) => { const k = accentKind(sel.id, sel.mat, aa); return `<button class="mat-chip ${aa === sel.acc ? 'sel' : ''}" data-acc="${aa}" title="${esc(name)} · tier ${i + 1} · ${KIND_LABEL[k]}"><canvas width="1" height="1"></canvas><span>${esc(name)}</span><i class="${k}">${k === 'recolour' ? 'colours' : 'auto'}</i></button>`; }).join('')}</div>
+        ${(cur().accentSwaps || []).length ? '' : `<p class="hint">No colours follow the fittings yet. Pick a colour and set it to follow the fittings.</p>`}
+      </div>
+      <div class="role"><b>${esc(m.name)} ${esc(d.name)}</b> · tier ${m.tier} · ${KIND_LABEL[kind]} · ${esc(MATERIALS[sel.acc].name)} fittings ${accentKind(sel.id, sel.mat, sel.acc) === 'recolour' ? 'recoloured' : 'automatic'}</div>
       <p class="hint">${explain}</p>
       <div class="row">
         ${kind !== 'design' ? `<button class="btn sm" id="pr-own">Give ${esc(m.name)} its own design</button>` : ''}
-        ${kind === 'recolour' ? `<button class="btn sm" id="pr-reset">Reset to automatic colours</button>` : ''}
+        ${kind === 'recolour' ? `<button class="btn sm" id="pr-reset">Reset ${esc(m.name)} colours</button>` : ''}
+        ${accentKind(sel.id, sel.mat, sel.acc) === 'recolour' ? `<button class="btn sm" id="pr-reset-acc">Reset ${esc(MATERIALS[sel.acc].name)} fittings</button>` : ''}
         ${kind === 'design' ? (ui.confirmShared ? `<span class="confirm">Discard ${esc(m.name)}'s own design? <button class="btn sm danger" id="pr-shared-yes">Discard</button><button class="btn sm" id="pr-shared-no">Keep</button></span>` : `<button class="btn sm danger" id="pr-shared">Use the shared design again…</button>`) : ''}
       </div>
       <hr>
@@ -541,7 +575,8 @@ function renderProps() {
       <div class="row" style="justify-content:space-between"><span class="hint">Pivot <code style="font-family:var(--mono)">${sp.pivot.x}, ${sp.pivot.y}</code>: the pixel that lands on the hand.</span>
         <button class="btn sm ${tool === 'anchor' ? 'on' : ''}" data-place="pivot">Place pivot</button></div>
       <p class="hint">Stats for each weapon type are coming soon.</p>`;
-    el.querySelectorAll('.mat-chip').forEach((b) => thumb(b.querySelector('canvas'), weaponSprite(sel.id, b.dataset.mat)));
+    el.querySelectorAll('.mat-chip[data-mat]').forEach((b) => thumb(b.querySelector('canvas'), weaponSprite(sel.id, b.dataset.mat, sel.acc)));
+    el.querySelectorAll('.mat-chip[data-acc]').forEach((b) => thumb(b.querySelector('canvas'), weaponSprite(sel.id, sel.mat, b.dataset.acc)));
   } else {
     const anchorOpts = new Set([...ANCHOR_NAMES, ...Object.values(sheet.bodies).flatMap((b) => Object.keys(b.anchors || {}))]);
     el.innerHTML = `
@@ -573,9 +608,10 @@ function renderPreviewControls() {
   const types = Object.entries(WEAPON_TYPES).filter(([id, t]) => t.cls === pvBody && sheet.weapons[id]);
   if (pvEquip && WEAPON_TYPES[pvEquip.type]?.cls !== pvBody) pvEquip = null;
   $('#pv-weapon').innerHTML = `<option value="">Nothing</option>` + types.map(([id]) => `<option value="${id}" ${pvEquip?.type === id ? 'selected' : ''}>${esc(sheet.weapons[id].name)}</option>`).join('');
-  const fam = pvEquip ? WEAPON_TYPES[pvEquip.type].family : null;
-  $('#pv-mat').disabled = !pvEquip;
+  const fam = pvEquip ? WEAPON_TYPES[pvEquip.type].family : null, afam = pvEquip ? WEAPON_TYPES[pvEquip.type].accent : null;
+  $('#pv-mat').disabled = $('#pv-acc').disabled = !pvEquip;
   $('#pv-mat').innerHTML = fam ? FAMILIES[fam].map(([m, n]) => `<option value="${m}" ${pvEquip.material === m ? 'selected' : ''}>${esc(n)}</option>`).join('') : '<option>—</option>';
+  $('#pv-acc').innerHTML = afam ? FAMILIES[afam].map(([m, n]) => `<option value="${m}" ${pvEquip.accent === m ? 'selected' : ''}>${esc(n)}</option>`).join('') : '<option>—</option>';
 }
 
 // Preview: drawn at 4x with the same squash-and-stretch the camp uses.
@@ -605,27 +641,35 @@ function drawPreview(t) {
 // Colours marked as swaps belong to the selected material's recolour; the
 // rest belong to whatever holds the pixels (shared design or own design).
 function setColor(i, hex) {
-  const d = doc();
-  if (isWeapon() && !ownDesign() && (d.swaps || []).includes(i)) {
+  const d = doc(), r = roleOf(i);
+  if (r === 'main') {
     d.variants = d.variants || {};
     const v = d.variants[sel.mat] = d.variants[sel.mat] || {};
-    v.colors = { ...autoColors(d, sel.mat), ...(v.colors || {}), [i]: hex };
+    v.colors = { ...autoColors(d.palette, d.swaps, sel.mat), ...(v.colors || {}), [i]: hex };
+  } else if (r === 'accent') {
+    const h = cur(); h.accents = h.accents || {};
+    const a = h.accents[sel.acc] = h.accents[sel.acc] || {};
+    a.colors = { ...autoColors(h.palette, h.accentSwaps, sel.acc), ...(a.colors || {}), [i]: hex };
   } else cur().palette[i] = hex;
 }
-function toggleSwap(i, on) {
-  const d = doc(); const s = new Set(d.swaps || []);
-  if (on) s.add(i); else { s.delete(i); for (const v of Object.values(d.variants || {})) if (v.colors) delete v.colors[i]; }
-  d.swaps = [...s].sort((a, b) => a - b);
+function setRole(i, role) {
+  const d = doc(), h = cur();
+  const drop = (list, obj) => { for (const v of Object.values(obj || {})) if (v.colors) delete v.colors[i]; return (list || []).filter((x) => x !== i); };
+  if (!ownDesign()) d.swaps = drop(d.swaps, d.variants);
+  h.accentSwaps = drop(h.accentSwaps, h.accents);
+  if (role === 'main' && !ownDesign()) d.swaps = [...d.swaps, i].sort((a, b) => a - b);
+  if (role === 'accent') h.accentSwaps = [...h.accentSwaps, i].sort((a, b) => a - b);
 }
-// Reorders a sprite's palette (and a shared weapon design's swaps and
-// recolours) after colours are removed.
+// Reorders a sprite's palette (and a weapon's swap marks and saved colours)
+// after colours are removed.
 function remapPalette(holder, remap) {
   holder.pixels = fromIdx(toIdx(holder).map((v) => (v < 0 ? -1 : remap.get(v))));
   holder.palette = [...remap.keys()].sort((a, b) => remap.get(a) - remap.get(b)).map((v) => holder.palette[v]);
-  if (isWeapon() && holder === doc()) {
-    holder.swaps = (holder.swaps || []).filter((i) => remap.has(i)).map((i) => remap.get(i));
-    for (const v of Object.values(holder.variants || {})) if (v.colors) v.colors = Object.fromEntries(Object.entries(v.colors).filter(([i]) => remap.has(+i)).map(([i, c]) => [remap.get(+i), c]));
-  }
+  if (!isWeapon()) return;
+  const remapColors = (obj) => { for (const v of Object.values(obj || {})) if (v.colors) v.colors = Object.fromEntries(Object.entries(v.colors).filter(([i]) => remap.has(+i)).map(([i, c]) => [remap.get(+i), c])); };
+  const remapList = (list) => (list || []).filter((i) => remap.has(i)).map((i) => remap.get(i));
+  holder.accentSwaps = remapList(holder.accentSwaps); remapColors(holder.accents);
+  if (holder === doc()) { holder.swaps = remapList(holder.swaps); remapColors(holder.variants); }
 }
 
 // ---------- Board interaction ----------
@@ -699,6 +743,7 @@ document.addEventListener('click', (ev) => {
   const t = ev.target.closest('button'); if (!t) return;
   if (t.matches('.shelf-item')) { select({ kind: t.dataset.kind, id: t.dataset.id }); return; }
   if (t.dataset.mat) { select({ ...sel, mat: t.dataset.mat }); return; }
+  if (t.dataset.acc) { select({ ...sel, acc: t.dataset.acc }); return; }
   if (t.dataset.tool) { tool = t.dataset.tool; renderProps(); drawBoard(); return; }
   if (t.dataset.color !== undefined) { color = Number(t.dataset.color); if (tool === 'eraser' && color >= 0) tool = 'pencil'; renderPalette(); renderProps(); return; }
   if (t.dataset.place) { tool = 'anchor'; if (t.dataset.place !== 'pivot') activeAnchor = t.dataset.place; renderProps(); drawBoard(); return; }
@@ -717,6 +762,7 @@ document.addEventListener('click', (ev) => {
     case 'pr-del-yes': if (canEdit()) removePiece(); break;
     case 'pr-own': if (canEdit()) giveOwnDesign(); break;
     case 'pr-reset': if (canEdit()) { pushUndo(); delete doc().variants[sel.mat]; changed(); renderShelf(); } break;
+    case 'pr-reset-acc': if (canEdit()) { pushUndo(); delete cur().accents[sel.acc]; changed(); renderShelf(); } break;
     case 'pr-shared': ui.confirmShared = true; renderProps(); break;
     case 'pr-shared-no': ui.confirmShared = false; renderProps(); break;
     case 'pr-shared-yes': if (canEdit()) { pushUndo(); delete doc().variants[sel.mat]; ui.confirmShared = false; changed(); renderShelf(); } break;
@@ -730,15 +776,16 @@ document.addEventListener('click', (ev) => {
 
 document.addEventListener('change', (ev) => {
   const t = ev.target;
-  if (t.id === 'pv-weapon') { pvEquip = t.value ? { type: t.value, material: FAMILIES[WEAPON_TYPES[t.value].family][0][0] } : null; renderPreviewControls(); return; }
+  if (t.id === 'pv-weapon') { pvEquip = t.value ? { type: t.value, material: FAMILIES[WEAPON_TYPES[t.value].family][0][0], accent: FAMILIES[WEAPON_TYPES[t.value].accent][0][0] } : null; renderPreviewControls(); return; }
   if (t.id === 'pv-mat') { if (pvEquip) pvEquip = { ...pvEquip, material: t.value }; return; }
+  if (t.id === 'pv-acc') { if (pvEquip) pvEquip = { ...pvEquip, accent: t.value }; return; }
   if (['opt-grid', 'opt-ghost'].includes(t.id)) { drawBoard(); return; }
   if (t.id === 'file-json') { importJson(t.files[0]); t.value = ''; return; }
   const sp = cur(); if (!sp) return;
   if (t.id === 'file-png') { importPng(t.files[0]); t.value = ''; return; }
   if (!canEdit()) return;
   if (t.id === 'pal-edit' && color >= 0) { pushUndo(); setColor(color, t.value); changed(); renderShelf(); return; }
-  if (t.id === 'pal-swap' && color >= 0) { pushUndo(); toggleSwap(color, t.checked); changed(); renderShelf(); return; }
+  if (t.id === 'pal-role' && color >= 0) { pushUndo(); setRole(color, t.value); changed(); renderShelf(); return; }
   if (t.id === 'pr-name') { pushUndo(); doc().name = t.value.trim(); changed(); renderShelf(); renderPreviewControls(); return; }
   if (['pr-slot', 'pr-anchor', 'pr-layer'].includes(t.id)) { pushUndo(); doc()[t.id.slice(3)] = t.value; changed(); return; }
   if (t.dataset.worn) { pushUndo(); const s = new Set(sp.wornBy || []); t.checked ? s.add(t.dataset.worn) : s.delete(t.dataset.worn); sp.wornBy = [...s]; changed(); }
@@ -781,9 +828,11 @@ window.addEventListener('resize', () => drawBoard());
 function select(s) {
   if (s.kind === 'weapons') {
     const fam = WEAPON_TYPES[s.id].family;
+    const afam = WEAPON_TYPES[s.id].accent;
     if (!s.mat || MATERIALS[s.mat]?.family !== fam) s.mat = lastMat[s.id] || FAMILIES[fam][0][0];
-    lastMat[s.id] = s.mat;
-    pvBody = WEAPON_TYPES[s.id].cls; pvEquip = { type: s.id, material: s.mat };
+    if (!s.acc || MATERIALS[s.acc]?.family !== afam) s.acc = lastAcc[s.id] || FAMILIES[afam][0][0];
+    lastMat[s.id] = s.mat; lastAcc[s.id] = s.acc;
+    pvBody = WEAPON_TYPES[s.id].cls; pvEquip = { type: s.id, material: s.mat, accent: s.acc };
   }
   sel = s; ui.confirmDelete = false; ui.confirmShared = false;
   const sp = cur();
@@ -794,9 +843,10 @@ function select(s) {
 }
 
 function giveOwnDesign() {
-  const d = doc(); const sp = weaponSprite(sel.id, sel.mat); pushUndo();
+  const d = doc(); const sp = weaponSprite(sel.id, sel.mat, null); pushUndo();
   d.variants = d.variants || {};
-  d.variants[sel.mat] = { w: sp.w, h: sp.h, pixels: sp.pixels, palette: [...sp.palette], pivot: { ...sp.pivot } };
+  d.variants[sel.mat] = { w: sp.w, h: sp.h, pixels: sp.pixels, palette: [...sp.palette], pivot: { ...sp.pivot },
+    accentSwaps: [...(d.accentSwaps || [])], accents: JSON.parse(JSON.stringify(d.accents || {})) };
   changed(); renderShelf(); toast(`${MATERIALS[sel.mat].name} now has its own design`);
 }
 function mirror() {
@@ -864,7 +914,11 @@ function importPng(file) {
     sp.w = c.width; sp.h = c.height; sp.palette = pal.length ? pal : ['#141414']; sp.pixels = fromIdx(a);
     // A new shared weapon shape means new colour numbers: clear the swap marks and recolours.
     let note = '';
-    if (isWeapon() && !ownDesign()) { sp.swaps = []; for (const v of Object.values(sp.variants || {})) delete v.colors; note = ' Mark the colours that change with the material again.'; }
+    if (isWeapon()) {
+      sp.accentSwaps = []; sp.accents = {};
+      if (!ownDesign()) { sp.swaps = []; for (const v of Object.values(sp.variants || {})) delete v.colors; }
+      note = ' Mark which colours follow the materials again.';
+    }
     color = 0; changed(); renderShelf(); toast(`Imported ${file.name}.${note}`);
   };
   img.onerror = () => toast("That file couldn't be read as an image.");
@@ -897,7 +951,7 @@ async function save(filename, data) {
 function downloadJson() { save('sprites.json', exportSheet()); }
 function downloadPng() {
   const sp = display(); if (!sp) return;
-  spriteCanvas(sp).toBlob((b) => save(`${isWeapon() ? `${sel.mat}-${sel.id}` : sel.id}.png`, b), 'image/png');
+  spriteCanvas(sp).toBlob((b) => save(`${isWeapon() ? `${sel.acc}-${sel.mat}-${sel.id}` : sel.id}.png`, b), 'image/png');
 }
 async function sendToGame() {
   if (!db) { toast('Not connected. Download sprites.json and add it to the repo instead.'); return; }

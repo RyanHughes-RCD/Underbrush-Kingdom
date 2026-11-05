@@ -158,29 +158,37 @@ export const SMELT_FALLOFF = 1.46;
 export const MAX_BATCH = 3; // pieces per batch
 
 // ---------- Weapons ----------
-// Each class has two weapon types. A weapon is one type made from one
-// material of that type's family (an Oak Longbow, a Steel Mace).
+// Each class has two weapon types. A weapon is one type made from two
+// materials: a main material from the type's `family` (2 needed) and a
+// fittings material from its `accentFamily` (1 needed), e.g. an
+// Iron-bound Oak Longbow or a Garnet-set Steel Mace.
+//   Archer Lizard: wood + metal   Beetle Knight: metal + crystal
+//   Wizard Mouse: crystal + wood
 //
 // `attack` is the base attack and `scaling` how much of each wielder stat
-// adds to it, both at material quality 1.0. The material's quality
-// multiplies both:
+// adds to it, both at quality 1.0. The weapon's quality blends its two
+// materials, the main one counting double:
+//   quality = (2 * main quality + fittings quality) / 3
+// and multiplies both:
 //   damage = quality * (attack + sum(scaling[stat] * wielderStat))
 // so a weapon grows stronger as its fighter levels up. In each class one
 // type hits harder early (higher attack) and the other scales better and
 // overtakes it around level 4-5.
-export const WEAPON_COST = 3;
+export const WEAPON_COST = { main: 2, accent: 1 };
+// How a fittings material reads in a weapon's name, by its family.
+export const ACCENT_WORD = { metal: 'bound', crystal: 'set', wood: 'handled' };
 export const WEAPONS = {
-  longbow: { id: 'longbow', name: 'Longbow',     cls: 'archer', family: 'wood',    icon: 'assets/items/bow.png',
+  longbow: { id: 'longbow', name: 'Longbow',     cls: 'archer', family: 'wood', accentFamily: 'metal',    icon: 'assets/items/bow.png',
     attack: 7, scaling: { dex: 0.4, str: 0.15 }, blurb: 'Heavy draw and long reach. Hits hard from the first shot.' },
-  recurve: { id: 'recurve', name: 'Recurve Bow', cls: 'archer', family: 'wood',    icon: 'assets/items/bow.png',
+  recurve: { id: 'recurve', name: 'Recurve Bow', cls: 'archer', family: 'wood', accentFamily: 'metal',    icon: 'assets/items/bow.png',
     attack: 5, scaling: { dex: 0.35, lck: 0.35 }, blurb: 'Quick and snappy. Grows deadlier as its archer gets luckier.' },
-  sword:   { id: 'sword',   name: 'Sword',       cls: 'knight', family: 'metal',   icon: 'assets/items/sword.png',
+  sword:   { id: 'sword',   name: 'Sword',       cls: 'knight', family: 'metal', accentFamily: 'crystal',   icon: 'assets/items/sword.png',
     attack: 9, scaling: { str: 0.35, dex: 0.2 }, blurb: 'A dependable blade. Strong from the start.' },
-  mace:    { id: 'mace',    name: 'Mace',        cls: 'knight', family: 'metal',   icon: 'assets/items/sword.png',
+  mace:    { id: 'mace',    name: 'Mace',        cls: 'knight', family: 'metal', accentFamily: 'crystal',   icon: 'assets/items/sword.png',
     attack: 6, scaling: { str: 0.45, mig: 0.25 }, blurb: 'Heavy and blunt. Hits harder the tougher its wielder becomes.' },
-  staff:   { id: 'staff',   name: 'Staff',       cls: 'mage',   family: 'crystal', icon: 'assets/items/staff.png',
+  staff:   { id: 'staff',   name: 'Staff',       cls: 'mage',   family: 'crystal', accentFamily: 'wood', icon: 'assets/items/staff.png',
     attack: 7, scaling: { int: 0.4, spi: 0.1 }, blurb: 'Channels raw intellect into spellfire. Strong from the start.' },
-  tome:    { id: 'tome',    name: 'Tome',        cls: 'mage',   family: 'crystal', icon: 'assets/items/staff.png',
+  tome:    { id: 'tome',    name: 'Tome',        cls: 'mage',   family: 'crystal', accentFamily: 'wood', icon: 'assets/items/staff.png',
     attack: 5, scaling: { int: 0.35, spi: 0.35 }, blurb: 'Patient magic that deepens with a calm spirit.' },
 };
 // Scaling letter grades, by effective scaling (after material quality).

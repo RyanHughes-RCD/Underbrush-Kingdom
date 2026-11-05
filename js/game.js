@@ -3,13 +3,13 @@
 
 import {
   CLASSES, CLASS_IDS, ITEMS, WEAPONS, WORKSHOPS, EXPEDITIONS, SCRAPS, MATERIALS,
-  materialAt, SMELT_FALLOFF, MAX_BATCH, WEAPON_COST,
+  materialAt, SMELT_FALLOFF, MAX_BATCH, WEAPON_COST, ACCENT_WORD,
   ENCOUNTER_MINUTES, MIN_ENCOUNTERS, MAX_ENCOUNTERS, MAX_PARTY,
   LURE_MINUTES, MAX_ROSTER,
 } from './data.js';
 import * as ST from './stats.js';
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 const MINUTE = 60 * 1000;
 
 // Debug/testing: multiplies the speed of all timers. Set via ?speed=60.
@@ -89,8 +89,11 @@ export function addCreature(state, cls, weaponId = null) {
 export function getCreature(state, id) { return state.creatures.find((c) => c.id === id); }
 export function getWeapon(state, id) { return state.weapons.find((w) => w.id === id); }
 
-export function weaponProfile(w) { return ST.weaponProfile(w.type, w.material); }
-export function weaponName(w) { return `${MATERIALS[w.material].name} ${WEAPONS[w.type].name}`; }
+export function weaponProfile(w) { return ST.weaponProfile(w.type, w.material, w.accent); }
+export function weaponName(w) {
+  const base = `${MATERIALS[w.material].name} ${WEAPONS[w.type].name}`;
+  return w.accent ? `${MATERIALS[w.accent].name}-${ACCENT_WORD[MATERIALS[w.accent].family]} ${base}` : base;
+}
 export function weaponTier(w) { return MATERIALS[w.material].tier; }
 export const withArticle = (name) => `${/^[aeiou]/i.test(name) ? 'an' : 'a'} ${name}`;
 
@@ -291,19 +294,23 @@ export function startSmelting(state, workshopId, count, now = Date.now()) {
 
 // ---------- Crafting weapons ----------
 
-export function canCraft(state, weaponType, materialId) {
+export function canCraft(state, weaponType, materialId, accentId) {
   const wt = WEAPONS[weaponType];
-  const mat = MATERIALS[materialId];
-  if (!wt || !mat || mat.family !== wt.family) return 'That material cannot make this weapon.';
-  if ((state.inventory[materialId] || 0) < WEAPON_COST) return `Needs ${WEAPON_COST} ${mat.name}.`;
+  if (!wt) return 'Unknown weapon.';
+  const mat = MATERIALS[materialId], acc = MATERIALS[accentId];
+  if (!mat || mat.family !== wt.family) return `Pick a ${wt.family} for the ${wt.name.toLowerCase()}.`;
+  if (!acc || acc.family !== wt.accentFamily) return `Pick a ${wt.accentFamily} for the fittings.`;
+  if ((state.inventory[materialId] || 0) < WEAPON_COST.main) return `Needs ${WEAPON_COST.main} ${mat.name}.`;
+  if ((state.inventory[accentId] || 0) < WEAPON_COST.accent) return `Needs ${WEAPON_COST.accent} ${acc.name}.`;
   return null;
 }
 
-export function craftWeapon(state, weaponType, materialId, now = Date.now()) {
-  const err = canCraft(state, weaponType, materialId);
+export function craftWeapon(state, weaponType, materialId, accentId, now = Date.now()) {
+  const err = canCraft(state, weaponType, materialId, accentId);
   if (err) throw new Error(err);
-  state.inventory[materialId] -= WEAPON_COST;
-  const w = { id: newId(state, 'w'), type: weaponType, material: materialId };
+  state.inventory[materialId] -= WEAPON_COST.main;
+  state.inventory[accentId] -= WEAPON_COST.accent;
+  const w = { id: newId(state, 'w'), type: weaponType, material: materialId, accent: accentId };
   state.weapons.push(w);
   addLog(state, `Crafted ${withArticle(weaponName(w))}.`, now);
   return w;
@@ -380,7 +387,7 @@ const SAVE_KEY = 'underbrush-kingdom-save';
 
 export function serialize(state) { return JSON.stringify(state); }
 
-/** Upgrades older saves. v1 had generic wood/metal/gem and weapon tiers 1-3; v2 had one weapon type per class. */
+/** Upgrades older saves. v1 had generic wood/metal/gem and weapon tiers 1-3; v2 had one weapon type per class; v3 weapons had one material. */
 export function migrate(s) {
   if (s.version === 1) {
     const map = { wood: 'wood', metal: 'metal', gem: 'crystal' };
@@ -403,6 +410,11 @@ export function migrate(s) {
     // v2 had one weapon per class; bows became Longbows (Recurve Bows are new).
     for (const w of s.weapons) if (w.type === 'bow') w.type = 'longbow';
     s.version = 3;
+  }
+  if (s.version === 3) {
+    // v3 weapons were one material; they get basic (tier 1) fittings.
+    for (const w of s.weapons) if (!w.accent) w.accent = materialAt(WEAPONS[w.type].accentFamily, 1);
+    s.version = 4;
   }
   return s;
 }

@@ -157,7 +157,9 @@
       "1": "#bfa06e"
      }
     }
-   }
+   },
+   "accentSwaps": [],
+   "accents": {}
   },
   "recurve": {
    "name": "Recurve Bow",
@@ -179,7 +181,11 @@
    "swaps": [
     1
    ],
-   "variants": {}
+   "variants": {},
+   "accentSwaps": [
+    3
+   ],
+   "accents": {}
   },
   "sword": {
    "name": "Sword",
@@ -203,7 +209,11 @@
     2,
     1
    ],
-   "variants": {}
+   "variants": {},
+   "accentSwaps": [
+    3
+   ],
+   "accents": {}
   },
   "mace": {
    "name": "Mace",
@@ -227,7 +237,9 @@
     2,
     1
    ],
-   "variants": {}
+   "variants": {},
+   "accentSwaps": [],
+   "accents": {}
   },
   "staff": {
    "name": "Staff",
@@ -252,7 +264,12 @@
     2,
     1
    ],
-   "variants": {}
+   "variants": {},
+   "accentSwaps": [
+    4,
+    5
+   ],
+   "accents": {}
   },
   "tome": {
    "name": "Tome",
@@ -273,10 +290,14 @@
    "anchor": "hand",
    "layer": "front",
    "swaps": [
-    2,
-    1
+    4
    ],
-   "variants": {}
+   "variants": {},
+   "accentSwaps": [
+    1,
+    2
+   ],
+   "accents": {}
   }
  },
  "pieces": {}

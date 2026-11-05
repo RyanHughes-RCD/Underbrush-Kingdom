@@ -82,13 +82,16 @@ test('workshop smelts over time, batches queue in turn', () => {
 
 test('craft, equip and lure', () => {
   const s = G.newGame(5);
-  s.inventory.pine = 3; s.inventory.steel = 3; s.inventory.oak = 3;
-  const bow = G.craftWeapon(s, 'longbow', 'pine');
-  assert.equal(G.weaponName(bow), 'Pine Longbow');
-  assert.throws(() => G.craftWeapon(s, 'recurve', 'pine'));
-  assert.throws(() => G.craftWeapon(s, 'longbow', 'steel'));
-  const sword = G.craftWeapon(s, 'mace', 'steel');
-  assert.equal(G.weaponName(sword), 'Steel Mace');
+  s.inventory.pine = 2; s.inventory.steel = 2; s.inventory.oak = 2; s.inventory.iron = 2; s.inventory.garnet = 1;
+  const bow = G.craftWeapon(s, 'longbow', 'pine', 'iron');
+  assert.equal(G.weaponName(bow), 'Iron-bound Pine Longbow');
+  assert.equal(s.inventory.pine, 0);
+  assert.equal(s.inventory.iron, 1);
+  assert.throws(() => G.craftWeapon(s, 'recurve', 'pine', 'iron'), /Needs 2 Pine/);
+  assert.throws(() => G.craftWeapon(s, 'longbow', 'oak', 'garnet'), /metal for the fittings/);
+  assert.throws(() => G.craftWeapon(s, 'longbow', 'steel', 'iron'));
+  const sword = G.craftWeapon(s, 'mace', 'steel', 'garnet');
+  assert.equal(G.weaponName(sword), 'Garnet-set Steel Mace');
   assert.ok(G.weaponProfile(sword).attack > G.weaponProfile(bow).attack); // steel beats pine
   const archer = s.creatures.find((c) => c.cls === 'archer');
   const knight = s.creatures.find((c) => c.cls === 'knight');
@@ -97,7 +100,7 @@ test('craft, equip and lure', () => {
   G.equipWeapon(s, archer.id, bow.id);
   assert.ok(G.creaturePower(s, archer) > before);
 
-  const bow2 = G.craftWeapon(s, 'recurve', 'oak');
+  const bow2 = G.craftWeapon(s, 'recurve', 'oak', 'iron');
   G.startLure(s, bow2.id, 0);
   G.tick(s, LURE_MINUTES * MIN);
   assert.equal(s.creatures.length, 4);
@@ -128,6 +131,13 @@ test('version 2 saves: bows become longbows', () => {
     inventory: { twig: 0 }, weapons: [{ id: 'w1', type: 'bow', material: 'oak' }, { id: 'w2', type: 'staff', material: 'quartz' }] };
   const s = G.deserialize(JSON.stringify(v2));
   assert.deepEqual(s.weapons.map((w) => w.type), ['longbow', 'staff']);
+});
+
+test('version 3 saves: weapons get basic fittings', () => {
+  const v3 = { version: 3, seed: 1, nextId: 3, creatures: [], expeditions: [], lures: [], log: [], jobs: [], discovered: [],
+    inventory: {}, weapons: [{ id: 'w1', type: 'longbow', material: 'oak' }, { id: 'w2', type: 'tome', material: 'garnet' }, { id: 'w3', type: 'mace', material: 'iron' }] };
+  const s = G.deserialize(JSON.stringify(v3));
+  assert.deepEqual(s.weapons.map((w) => w.accent), ['iron', 'pine', 'quartz']);
 });
 
 test('save round-trips', () => {

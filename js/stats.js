@@ -20,16 +20,24 @@ export function gradeOf(coef) {
   return '-';
 }
 
+/** A weapon's quality: its main material counts double, its fittings once. */
+export function weaponQuality(materialId, accentId) {
+  const qm = MATERIALS[materialId].quality;
+  if (!accentId) return qm;
+  return Math.round(((2 * qm + MATERIALS[accentId].quality) / 3) * 100) / 100;
+}
+
 /**
- * A weapon type made from a material: attack and scaling both multiplied by
- * the material's quality. Scaling is listed strongest first.
+ * A weapon type made from a main material and a fittings material: attack
+ * and scaling both multiplied by the weapon's quality. Scaling is listed
+ * strongest first.
  */
-export function weaponProfile(type, materialId) {
-  const wt = WEAPONS[type], q = MATERIALS[materialId].quality;
+export function weaponProfile(type, materialId, accentId) {
+  const wt = WEAPONS[type], q = weaponQuality(materialId, accentId);
   const scaling = Object.entries(wt.scaling)
     .map(([stat, c]) => ({ stat, coef: c * q, grade: gradeOf(c * q) }))
     .sort((a, b) => b.coef - a.coef);
-  return { type, material: materialId, quality: q, attack: Math.round(wt.attack * q), baseAttack: wt.attack * q, scaling };
+  return { type, material: materialId, accent: accentId, quality: q, attack: Math.round(wt.attack * q), baseAttack: wt.attack * q, scaling };
 }
 
 /** Damage of a weapon profile in the hands of a fighter with these stats. */

@@ -1,7 +1,7 @@
 // UI layer: renders state into the DOM and wires up taps.
 import {
   CLASSES, CLASS_IDS, ITEMS, WEAPONS, WORKSHOPS, EXPEDITIONS, EXPEDITION_IDS,
-  SCRAPS, MATERIALS, FAMILIES, MAX_BATCH, WEAPON_COST, TIER_NAMES, STATS, STAT_IDS,
+  SCRAPS, MATERIALS, FAMILIES, MAX_BATCH, WEAPON_COST, TIER_NAMES, STATS, STAT_IDS, ACCENT_WORD,
   ENCOUNTER_MINUTES, MIN_ENCOUNTERS, MAX_ENCOUNTERS, MAX_PARTY, LURE_MINUTES,
 } from './data.js';
 import * as G from './game.js';
@@ -19,6 +19,7 @@ const ui = {
   party: [],             // creature ids chosen for it
   count: 3,              // encounters chosen
   smelt: { woodworker: 3, forge: 3, enchanter: 3 }, // pieces per batch
+  craft: {},             // workshop id -> {type, material, accent} being planned
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -40,14 +41,14 @@ function fmtMinutes(min) {
 }
 const icon = (id, cls = '') => `<img class="${cls}" src="${(ITEMS[id] || WEAPONS[id]).icon}" alt="${esc((ITEMS[id] || WEAPONS[id]).name)}">`;
 const sprite = (cls, size = 32, c = '') => S.creatureImg(S.creatureArt(cls), size, c);
-const equippedIds = (c) => { const w = G.getWeapon(state, c.weaponId); return w ? [{ type: w.type, material: w.material }] : []; };
+const equippedIds = (c) => { const w = G.getWeapon(state, c.weaponId); return w ? [{ type: w.type, material: w.material, accent: w.accent }] : []; };
 const creatureArt = (c) => S.creatureArt(c.cls, equippedIds(c));
 const creatureSprite = (c, size, cls = '') => S.creatureImg(creatureArt(c), size, cls);
-const pieceIcon = (type, material, size = 32) => {
-  const art = S.weaponArt(type, material);
+const pieceIcon = (type, material, accent, size = 32) => {
+  const art = S.weaponArt(type, material, accent);
   return art ? `<img src="${art.url}" alt="" style="width:${size}px;height:${size * art.h / art.w}px">` : icon(type);
 };
-const weaponIcon = (w) => pieceIcon(w.type, w.material);
+const weaponIcon = (w) => pieceIcon(w.type, w.material, w.accent);
 const countdown = (endsAt) => `<span data-ends="${endsAt}">${fmtDuration(endsAt - Date.now())}</span>`;
 const lootText = (loot) => Object.entries(loot).map(([k, q]) => `${icon(k)}×${q}`).join(' ');
 
@@ -328,31 +329,64 @@ function renderWorkshops() {
           </div>
         </div>
 
-        <div class="ws-section">
-          <div class="small" style="margin-bottom:6px"><b>Craft weapons</b> <span class="muted">for ${CLASSES[ws.cls].plural} · ${WEAPON_COST} of one material</span></div>
-          ${owned.length ? `<div class="craft-list">${owned.map((m) => {
-            const mat = MATERIALS[m.id];
-            return `<div class="craft-row"><div class="craft-mat">${icon(m.id)}<span><b>${esc(mat.name)}</b><br><span class="muted">${state.inventory[m.id]}/${WEAPON_COST} · quality ×${mat.quality}</span></span></div>
-              ${types.map((wt) => `<button class="btn ghost craft" data-action="craft" data-type="${wt.id}" data-material="${m.id}" ${G.canCraft(state, wt.id, m.id) ? 'disabled' : ''}>
-                ${pieceIcon(wt.id, m.id)}<span>${esc(wt.name)}</span><span class="ptags">${profileTags(ST.weaponProfile(wt.id, m.id))}</span></button>`).join('')}</div>`;
-          }).join('')}</div>` : `<p class="small muted">Smelt some ${esc(sc.name.toLowerCase())}s first.</p>`}
-        </div>
+        ${craftPanel(ws, types)}
       </div>`;
     }).join('')}`;
+}
+
+/** The workshop's weapon bench: pick a type, a main material and fittings. */
+function craftPanel(ws, types) {
+  const fam = ws.family, accFam = types[0].accentFamily;
+  const have = (id) => state.inventory[id] || 0;
+  const mains = FAMILIES[fam].list.filter((m) => have(m.id) > 0);
+  const accents = FAMILIES[accFam].list.filter((m) => have(m.id) > 0);
+  const plan = ui.craft[ws.id] = ui.craft[ws.id] || {};
+  if (!types.some((t) => t.id === plan.type)) plan.type = types[0].id;
+  if (!mains.some((m) => m.id === plan.material)) plan.material = (mains.find((m) => have(m.id) >= WEAPON_COST.main) || mains[0])?.id;
+  if (!accents.some((m) => m.id === plan.accent)) plan.accent = accents[0]?.id;
+  const chip = (m, role, need) => `<button class="mchip ${plan[role] === m.id ? 'on' : ''} ${have(m.id) < need ? 'short' : ''}" data-action="plan-craft" data-id="${ws.id}" data-role="${role}" data-value="${m.id}">
+      ${icon(m.id)}<span>${esc(m.name)}</span><i>${have(m.id)}/${need}</i></button>`;
+  const head = `<div class="small" style="margin-bottom:6px"><b>Weapon bench</b> <span class="muted">for ${CLASSES[ws.cls].plural} · ${WEAPON_COST.main} ${FAMILIES[fam].name.toLowerCase()} + ${WEAPON_COST.accent} ${FAMILIES[accFam].name.toLowerCase().slice(0, -1)}</span></div>`;
+  if (!mains.length || !accents.length) {
+    const need = [!mains.length && `some ${FAMILIES[fam].name.toLowerCase()} here`, !accents.length && `some ${FAMILIES[accFam].name.toLowerCase()} at the ${Object.values(WORKSHOPS).find((w) => w.family === accFam).name}`].filter(Boolean).join(' and ');
+    return `<div class="ws-section">${head}<p class="small muted">Weapons need two materials. Smelt ${need} first.</p></div>`;
+  }
+  const w = { type: plan.type, material: plan.material, accent: plan.accent };
+  const prof = ST.weaponProfile(w.type, w.material, w.accent);
+  const err = G.canCraft(state, w.type, w.material, w.accent);
+  return `<div class="ws-section">${head}
+    <div class="seg">${types.map((t) => `<button class="${t.id === plan.type ? 'on' : ''}" data-action="plan-craft" data-id="${ws.id}" data-role="type" data-value="${t.id}">${esc(t.name)}</button>`).join('')}</div>
+    <div class="small bench-label">${esc(FAMILIES[fam].name.slice(0, -1))} <span class="muted">· the weapon itself (counts double)</span></div>
+    <div class="mchips">${mains.map((m) => chip(m, 'material', WEAPON_COST.main)).join('')}</div>
+    <div class="small bench-label">Fittings <span class="muted">· ${esc(FAMILIES[accFam].name.toLowerCase())}</span></div>
+    <div class="mchips">${accents.map((m) => chip(m, 'accent', WEAPON_COST.accent)).join('')}</div>
+    <div class="bench-preview">
+      <div class="bench-art">${pieceIcon(w.type, w.material, w.accent, 48)}</div>
+      <div class="grow small"><b>${esc(G.weaponName(w))}</b><div class="ptags">${profileTags(prof)}</div>
+        <span class="muted">Quality ×${prof.quality} · ${esc(WEAPONS[w.type].blurb)}</span></div>
+    </div>
+    <button class="btn block green" data-action="craft" data-id="${ws.id}" ${err ? 'disabled' : ''}>${err ? esc(err) : `Craft ${esc(G.weaponName(w))}`}</button>
+  </div>`;
 }
 
 function openMaterial(id) {
   const m = MATERIALS[id];
   const fam = FAMILIES[m.family];
   const types = Object.values(WEAPONS).filter((w) => w.family === m.family);
+  const fitsFor = Object.values(WEAPONS).filter((w) => w.accentFamily === m.family);
   openModal(`
     <div class="row">${icon(m.id, 'mat-lg')}<div class="grow">
       <h3>${esc(m.name)}</h3>
       <div class="small muted">${esc(fam.name.slice(0, -1))} · tier ${m.tier} · ${TIER_NAMES[m.tier - 1]}</div>
     </div></div>
     <p class="small">${esc(m.blurb)}</p>
-    <p class="small">You have <b>${state.inventory[m.id] || 0}</b>. Quality <b>×${m.quality}</b>: weapons made from ${esc(m.name)} multiply their attack and scaling by this.</p>
-    <div class="stack-list">${types.map((t) => `<div class="weapon-row">${pieceIcon(t.id, m.id, 40)}<div class="grow small"><b>${esc(m.name)} ${esc(t.name)}</b><div class="ptags">${profileTags(ST.weaponProfile(t.id, m.id))}</div><span class="muted">${esc(t.blurb)}</span></div></div>`).join('')}</div>
+    <p class="small">You have <b>${state.inventory[m.id] || 0}</b>. Quality <b>×${m.quality}</b>. A weapon's quality is two parts main material to one part fittings.</p>
+    <div class="small"><b>As the main material</b> <span class="muted">(with basic fittings)</span></div>
+    <div class="stack-list">${types.map((t) => { const acc = FAMILIES[t.accentFamily].list[0].id; const w = { type: t.id, material: m.id, accent: acc };
+      return `<div class="weapon-row">${pieceIcon(t.id, m.id, acc, 40)}<div class="grow small"><b>${esc(G.weaponName(w))}</b><div class="ptags">${profileTags(ST.weaponProfile(t.id, m.id, acc))}</div></div></div>`; }).join('')}</div>
+    <div class="small"><b>As fittings</b> for ${fitsFor.map((t) => `${CLASSES[t.cls].plural.toLowerCase()}' ${t.name.toLowerCase()}s`).filter((x, i, a) => a.indexOf(x) === i).join(' and ')}</div>
+    <div class="stack-list">${fitsFor.map((t) => { const main = FAMILIES[t.family].list[0].id; const w = { type: t.id, material: main, accent: m.id };
+      return `<div class="weapon-row">${pieceIcon(t.id, main, m.id, 40)}<div class="grow small"><b>${esc(G.weaponName(w))}</b><div class="ptags">${profileTags(ST.weaponProfile(t.id, main, m.id))}</div></div></div>`; }).join('')}</div>
     <button class="btn block ghost" data-action="close">Close</button>`);
 }
 
@@ -445,7 +479,8 @@ document.addEventListener('click', (ev) => {
     case 'smelt-n': ui.smelt[id] = Math.max(1, Math.min(MAX_BATCH, ui.smelt[id] + Number(el.dataset.d))); render(); break;
     case 'smelt': act(() => G.startSmelting(state, id, Number(el.dataset.n))); break;
     case 'material': openMaterial(id); break;
-    case 'craft': act(() => { const w = G.craftWeapon(state, el.dataset.type, el.dataset.material); toast(`Crafted ${G.withArticle(G.weaponName(w))}!`); }); break;
+    case 'plan-craft': ui.craft[id] = { ...ui.craft[id], [el.dataset.role]: el.dataset.value }; render(); break;
+    case 'craft': act(() => { const p = ui.craft[id]; const w = G.craftWeapon(state, p.type, p.material, p.accent); toast(`Crafted ${G.withArticle(G.weaponName(w))}!`); }); break;
     case 'reset':
       if (confirm('Erase your kingdom and start over?')) { G.clearStorage(); state = G.newGame(); save(); ui.expType = null; render(); }
       break;

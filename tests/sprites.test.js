@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { layout, decode, PAD, weaponSprite, autoColors, variantKind } from '../js/sprites.js';
+import { layout, decode, PAD, weaponSprite, autoColors, variantKind, accentKind } from '../js/sprites.js';
 import { CLASS_IDS, CLASSES, WEAPONS, FAMILIES } from '../js/data.js';
 
 const sheet = JSON.parse(readFileSync(new URL('../assets/sprites/sprites.json', import.meta.url)));
@@ -18,7 +18,8 @@ test('every class has a body and two weapon types with a design', () => {
 test('every weapon type renders in every material of its family', () => {
   for (const [t, w] of Object.entries(WEAPONS)) {
     for (const m of FAMILIES[w.family].list) {
-      const sp = weaponSprite(sheet, t, m.id);
+      const acc = FAMILIES[w.accentFamily].list[4].id;
+      const sp = weaponSprite(sheet, t, m.id, acc);
       assert.ok(sp, `${t} ${m.id}`);
       assert.equal(sp.pixels.length, sp.w * sp.h);
       assert.equal(decode(sp).length, sp.w * sp.h * 4);
@@ -39,10 +40,27 @@ test('saved recolours win; other materials recolour automatically', () => {
 });
 
 test('auto colours spread dark to light over the swap colours', () => {
-  const d = { palette: ['#000000', '#cccccc', '#444444'], swaps: [1, 2] };
-  const c = autoColors(d, 'steel');
+  const c = autoColors(['#000000', '#cccccc', '#444444'], [1, 2], 'steel');
   assert.equal(c[2], '#2c3640'); // darker base colour gets the dark tone
   assert.equal(c[1], '#d6e2ec');
+});
+
+test('fittings recolour only the fittings colours', () => {
+  const plain = weaponSprite(sheet, 'staff', 'garnet');
+  const oak = weaponSprite(sheet, 'staff', 'garnet', 'oak');
+  const god = weaponSprite(sheet, 'staff', 'garnet', 'godwood');
+  const acc = sheet.weapons.staff.accentSwaps;
+  assert.ok(acc.length);
+  for (let i = 0; i < plain.palette.length; i++) {
+    if (acc.includes(i)) assert.notEqual(oak.palette[i], god.palette[i], `fittings colour ${i}`);
+    else assert.equal(oak.palette[i], plain.palette[i], `colour ${i} is not a fitting`);
+  }
+  // Saved fittings colours win over automatic ones.
+  const data = structuredClone(sheet);
+  data.weapons.staff.accents = { oak: { colors: { [acc[0]]: '#123456' } } };
+  assert.equal(weaponSprite(data, 'staff', 'garnet', 'oak').palette[acc[0]], '#123456');
+  assert.equal(accentKind(data, 'staff', 'garnet', 'oak'), 'recolour');
+  assert.equal(accentKind(data, 'staff', 'garnet', 'pine'), 'auto');
 });
 
 test('a material with its own design uses its own pixels', () => {
@@ -55,8 +73,8 @@ test('a material with its own design uses its own pixels', () => {
 });
 
 test('an equipped weapon is placed with its pivot on the body anchor', () => {
-  const parts = layout(sheet, 'archer', [{ type: 'longbow', material: 'oak' }]);
-  const bow = parts.find((p) => p.id === 'longbow:oak');
+  const parts = layout(sheet, 'archer', [{ type: 'longbow', material: 'oak', accent: 'iron' }]);
+  const bow = parts.find((p) => p.id === 'longbow:oak+iron');
   const a = sheet.bodies.archer.anchors.hand, pv = sheet.weapons.longbow.pivot;
   assert.equal(bow.x + pv.x, PAD + a.x);
   assert.equal(bow.y + pv.y, PAD + a.y);

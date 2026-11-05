@@ -16,7 +16,7 @@ PAD = 8
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SHEET = os.path.join(ROOT, 'assets/sprites/sprites.json')
 FILES = {'archer': 'archer-lizard', 'knight': 'beetle-knight', 'mage': 'wizard-mouse'}
-KEEP = ('name', 'w', 'h', 'palette', 'pixels', 'anchors', 'slot', 'anchor', 'pivot', 'layer', 'wornBy', 'swaps', 'variants')
+KEEP = ('name', 'w', 'h', 'palette', 'pixels', 'anchors', 'slot', 'anchor', 'pivot', 'layer', 'wornBy', 'swaps', 'variants', 'accentSwaps', 'accents')
 
 
 def validate(kind, id_, s):
@@ -30,7 +30,16 @@ def validate(kind, id_, s):
             assert k in s, f'{kind}/{id_}: missing {k}'
         for i in s.get('swaps', []):
             assert 0 <= i < len(s['palette']), f'{kind}/{id_}: swap colour {i} not in palette'
+        def check_accents(holder, where):
+            for i in holder.get('accentSwaps', []):
+                assert 0 <= i < len(holder['palette']), f'{where}: fittings colour {i} not in palette'
+            for acc, a in (holder.get('accents') or {}).items():
+                for i in (a.get('colors') or {}):
+                    assert int(i) < len(holder['palette']), f'{where}/fittings {acc}: colour {i} not in palette'
+        check_accents(s, f'{kind}/{id_}')
         for mat, v in (s.get('variants') or {}).items():
+            if 'pixels' in v:
+                check_accents(v, f'{kind}/{id_}/{mat}')
             if 'pixels' in v:
                 assert len(v['pixels']) == v['w'] * v['h'], f'{kind}/{id_}/{mat}: pixel count does not match size'
             for i in (v.get('colors') or {}):

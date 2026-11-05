@@ -11,13 +11,21 @@
 // `wornBy` including a class are always drawn on that class. An equipped
 // weapon replaces any worn piece in the same slot.
 //
-// WEAPON DESIGNS hold the shared shape (w, h, pixels, palette, pivot) and
-// `swaps`: the palette indices that change with the material. Each material
-// can have a variant:
+// WEAPON DESIGNS hold the shared shape (w, h, pixels, palette, pivot).
+// A weapon is made of a main material and a fittings material (accent), and
+// each palette colour is fixed, follows the main material, or follows the
+// fittings:
+//   swaps        palette indices that change with the main material
+//   accentSwaps  palette indices that change with the fittings material
+// Main materials can have a variant:
 //   variants.<material> = {colors: {"<index>": "#hex"}}     a recolour
-//   variants.<material> = {w, h, pixels, palette, pivot}     its own design
-// A material with no variant (or no colour for a swap index) is recoloured
-// automatically from that material's palette in js/data.js.
+//   variants.<material> = {w, h, pixels, palette, pivot,    its own design
+//                          accentSwaps, accents}
+// Fittings colours are saved per fittings material on whatever holds the
+// pixels (the shared design, or a main material's own design):
+//   accents.<material> = {colors: {"<index>": "#hex"}}
+// Anything not saved is recoloured automatically from that material's
+// palette in js/data.js.
 
 import { MATERIALS } from './data.js';
 
@@ -41,15 +49,14 @@ function lum(hex) {
 }
 
 /**
- * Automatic colours for a design's swap indices: spreads the material's
- * [dark, mid, light] tones over the swap colours, darkest to lightest.
+ * Automatic colours for swap indices: spreads the material's
+ * [dark, mid, light] tones over those colours, darkest to lightest.
  * One swap colour takes the mid tone.
  */
-export function autoColors(design, materialId) {
+export function autoColors(palette, swaps, materialId) {
   const tones = MATERIALS[materialId]?.palette;
-  const swaps = design.swaps || [];
-  if (!tones || !swaps.length) return {};
-  const order = [...swaps].sort((a, b) => lum(design.palette[a]) - lum(design.palette[b]));
+  if (!tones || !swaps?.length) return {};
+  const order = [...swaps].sort((a, b) => lum(palette[a]) - lum(palette[b]));
   const out = {};
   order.forEach((idx, i) => {
     const t = order.length === 1 ? 1 : Math.round((i / (order.length - 1)) * 2);
@@ -58,24 +65,35 @@ export function autoColors(design, materialId) {
   return out;
 }
 
+const applyColors = (palette, colors) => palette.map((c, i) => colors[i] || c);
+
 /**
- * The sprite for one weapon type in one material: the variant's own design
- * if it has one, otherwise the shared design with that material's colours.
+ * The sprite for one weapon type in a main material and (optionally) a
+ * fittings material: the main material's own design if it has one,
+ * otherwise the shared design recoloured; then fittings colours on top.
  */
-export function weaponSprite(data, type, materialId) {
+export function weaponSprite(data, type, materialId, accentId) {
   const d = data?.weapons?.[type];
   if (!d) return null;
   const v = d.variants?.[materialId];
-  const base = { slot: 'weapon', anchor: d.anchor, layer: d.layer, name: d.name };
-  if (v?.pixels) return { ...base, w: v.w, h: v.h, pixels: v.pixels, palette: v.palette, pivot: v.pivot || d.pivot };
-  const colors = { ...autoColors(d, materialId), ...(v?.colors || {}) };
-  return { ...base, w: d.w, h: d.h, pixels: d.pixels, pivot: d.pivot, palette: d.palette.map((c, i) => colors[i] || c) };
+  const holder = v?.pixels ? v : d;
+  let palette = holder === v ? [...v.palette] : applyColors(d.palette, { ...autoColors(d.palette, d.swaps, materialId), ...(v?.colors || {}) });
+  if (accentId) palette = applyColors(palette, { ...autoColors(holder.palette, holder.accentSwaps, accentId), ...(holder.accents?.[accentId]?.colors || {}) });
+  return { slot: 'weapon', anchor: d.anchor, layer: d.layer, name: d.name, w: holder.w, h: holder.h, pixels: holder.pixels, pivot: holder.pivot || d.pivot, palette };
 }
 
-/** How a material's variant is defined: 'design', 'recolour' or 'auto'. */
+/** How a main material's variant is defined: 'design', 'recolour' or 'auto'. */
 export function variantKind(data, type, materialId) {
   const v = data?.weapons?.[type]?.variants?.[materialId];
   return v?.pixels ? 'design' : v?.colors && Object.keys(v.colors).length ? 'recolour' : 'auto';
+}
+
+/** Whether a fittings material has saved colours ('recolour') or not ('auto'). */
+export function accentKind(data, type, materialId, accentId) {
+  const d = data?.weapons?.[type]; if (!d) return 'auto';
+  const v = d.variants?.[materialId];
+  const holder = v?.pixels ? v : d;
+  return holder.accents?.[accentId]?.colors && Object.keys(holder.accents[accentId].colors).length ? 'recolour' : 'auto';
 }
 
 function hexToRgb(hex) {
@@ -98,16 +116,16 @@ export function decode(sprite) {
   return out;
 }
 
-/** Resolves an equipped item: a piece id, or a weapon {type, material}. */
+/** Resolves an equipped item: a piece id, or a weapon {type, material, accent}. */
 function resolve(data, e) {
   if (typeof e === 'string') return data.pieces?.[e] ? [e, data.pieces[e]] : null;
-  const sp = weaponSprite(data, e.type, e.material);
-  return sp ? [`${e.type}:${e.material}`, sp] : null;
+  const sp = weaponSprite(data, e.type, e.material, e.accent);
+  return sp ? [`${e.type}:${e.material}${e.accent ? '+' + e.accent : ''}`, sp] : null;
 }
 
 /**
  * Which pieces a class wears, and where. `equipped` lists piece ids and/or
- * weapons as {type, material}. Returns draw-ordered layers with positions
+ * weapons as {type, material, accent}. Returns draw-ordered layers with positions
  * relative to the composite's top-left (body at PAD, PAD).
  */
 export function layout(data, cls, equipped = []) {
@@ -170,8 +188,10 @@ function artFor(key, sprite) {
 /** A single gear piece on its own. */
 export function pieceArt(id) { return artFor(`p:${id}`, sheet.pieces?.[id]); }
 
-/** One weapon type in one material, for inventory icons. */
-export function weaponArt(type, materialId) { return artFor(`w:${type}:${materialId}`, weaponSprite(sheet, type, materialId)); }
+/** One weapon, for inventory icons. */
+export function weaponArt(type, materialId, accentId) {
+  return artFor(`w:${type}:${materialId}:${accentId || ''}`, weaponSprite(sheet, type, materialId, accentId));
+}
 
 /**
  * An <img> of creature art where `size` is the on-screen size of the body
