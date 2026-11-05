@@ -2,13 +2,12 @@
 // camp wander about. Everything is drawn at a low "logical" resolution and
 // scaled up by a whole number so the pixel art stays crisp.
 
-import { CLASSES } from './data.js';
 import { mulberry32 } from './game.js';
+import { PAD } from './sprites.js';
 
 const SCENE_H = 160;         // logical pixels tall
 const TARGET_W = 190;        // roughly how many logical pixels wide
 const WALK_SPEED = 11;       // logical px per second
-const SPRITE = 32;
 
 const GRASS = ['#4f8a3a', '#55913e', '#4a8336', '#5a9642'];
 const TUFT_LIGHT = '#6dab4c';
@@ -18,16 +17,6 @@ const FLOWERS = ['#f4f0d4', '#f2c94c', '#e58fb8', '#9fc3f0'];
 const LEAF = { outline: '#132313', shades: ['#1f3d24', '#2b5e30', '#3f8239', '#5fa043', '#86be52'] };
 const PINE = { outline: '#102019', shades: ['#173a2e', '#21523b', '#2f6d4a', '#43875a', '#5f9e68'] };
 const BARK = { outline: '#1f140c', shades: ['#3a2416', '#5c3a22', '#7a5030'] };
-
-const spriteCache = {};
-function spriteImage(cls) {
-  if (!spriteCache[cls]) {
-    const img = new Image();
-    img.src = CLASSES[cls].sprite;
-    spriteCache[cls] = img;
-  }
-  return spriteCache[cls];
-}
 
 function makeCanvas(w, h) {
   const c = document.createElement('canvas');
@@ -232,10 +221,10 @@ export class CampScene {
     const ids = new Set(list.map((c) => c.id));
     for (const id of this.walkers.keys()) if (!ids.has(id)) this.walkers.delete(id);
     for (const c of list) {
-      if (this.walkers.has(c.id)) continue;
+      if (this.walkers.has(c.id)) { this.walkers.get(c.id).art = c.art; continue; }
       const p = this.randomSpot();
       this.walkers.set(c.id, {
-        id: c.id, cls: c.cls, x: p.x, y: p.y, tx: p.x, ty: p.y,
+        id: c.id, cls: c.cls, art: c.art, x: p.x, y: p.y, tx: p.x, ty: p.y,
         wait: this.rng() * 2, facing: this.rng() < 0.5 ? 1 : -1,
         phase: this.rng() * Math.PI * 2, moving: false,
       });
@@ -305,8 +294,8 @@ export class CampScene {
         continue;
       }
       const w = th.walker;
-      const img = spriteImage(w.cls);
-      if (!img.complete) continue;
+      const art = w.art;
+      if (!art) continue;
       // Squash and stretch, anchored at the feet. Bouncy while walking, a
       // slow gentle breath while standing still.
       const amp = w.moving ? 0.11 : 0.035;
@@ -322,7 +311,7 @@ export class CampScene {
       ctx.save();
       ctx.translate(fx, fy);
       ctx.scale(w.facing * sx * s, sy * s);
-      ctx.drawImage(img, -SPRITE / 2, -SPRITE + 1);
+      ctx.drawImage(art.canvas, -(PAD + art.w / 2), -(PAD + art.h) + 1);
       ctx.restore();
     }
   }

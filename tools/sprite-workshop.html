@@ -1,0 +1,798 @@
+<title>Underbrush Sprite Workshop</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: a night-time workbench. Sprite shelf on the left, the drawing board in the middle, the fitting room (properties + live preview) on the right; stacks on phones. */
+:root {
+  --moss: #141f17;
+  --bench: #1d2b21;
+  --board: #26382b;
+  --line: #3a5240;
+  --parch: #efe3c2;
+  --parch-dim: #b8b195;
+  --amber: #e9ac4a;
+  --amber-ink: #2a1d08;
+  --danger: #e2735b;
+  --ok: #8fd07a;
+  --a-hand: #ff6f61;
+  --a-offhand: #5cc8ff;
+  --a-head: #ffd35c;
+  --a-chest: #b49bff;
+  --a-back: #7fe0a0;
+  --a-other: #ff9de2;
+  --display: 'Pixelify Sans', ui-monospace, monospace;
+  --body: 'Atkinson Hyperlegible', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  background: var(--moss); color: var(--parch); font-family: var(--body); font-size: 15px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 12px 24px;
+}
+* { box-sizing: border-box; }
+h1, h2, h3 { font-family: var(--display); font-weight: 700; margin: 0; text-wrap: balance; letter-spacing: .3px; }
+h1 { font-size: 22px; }
+h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--parch-dim); font-weight: 500; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+.top { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin-bottom: 12px; }
+.top .grow { flex: 1; min-width: 200px; }
+.top p { margin: 2px 0 0; color: var(--parch-dim); font-size: 13px; }
+.pill { font-family: var(--mono); font-size: 12px; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--bench); white-space: nowrap; }
+.pill.ok { color: var(--ok); } .pill.busy { color: var(--amber); } .pill.bad { color: var(--danger); }
+
+.btn { background: var(--board); border: 1px solid var(--line); border-radius: 6px; padding: 7px 11px; min-height: 36px; }
+.btn:hover:not(:disabled) { border-color: var(--parch-dim); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn.primary { background: var(--amber); color: var(--amber-ink); border-color: var(--amber); font-weight: 700; }
+.btn.danger { color: var(--danger); }
+.btn.sm { min-height: 30px; padding: 3px 8px; font-size: 13px; }
+.btn.on { background: var(--parch); color: var(--moss); border-color: var(--parch); }
+
+.banner { border: 1px dashed var(--amber); color: var(--amber); padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; font-size: 14px; }
+
+.layout { display: grid; grid-template-columns: 210px minmax(0, 1fr) 320px; gap: 14px; align-items: start; }
+@media (max-width: 980px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--bench); border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-width: 0; }
+.stack { display: flex; flex-direction: column; gap: 10px; }
+
+/* Shelf */
+.shelf { display: flex; flex-direction: column; gap: 12px; }
+.shelf-group { display: flex; flex-direction: column; gap: 4px; }
+.shelf-items { display: flex; flex-direction: column; gap: 4px; }
+@media (max-width: 980px) { .shelf-items { flex-direction: row; overflow-x: auto; padding-bottom: 4px; } .shelf-item { flex: 0 0 auto; } }
+.shelf-item { display: flex; gap: 8px; align-items: center; text-align: left; background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 4px 6px; }
+.shelf-item:hover { border-color: var(--line); }
+.shelf-item.sel { background: var(--board); border-color: var(--amber); }
+.shelf-item canvas { width: 32px; height: 32px; image-rendering: pixelated; background: var(--board); border-radius: 3px; flex: 0 0 auto; }
+.shelf-item .meta { display: flex; flex-direction: column; min-width: 0; }
+.shelf-item .meta b { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.shelf-item .meta span { font-family: var(--mono); font-size: 11px; color: var(--parch-dim); }
+
+/* Board */
+.toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.toolbar .sep { width: 1px; height: 24px; background: var(--line); margin: 0 4px; }
+.board-wrap { overflow: auto; background: var(--moss); border: 1px solid var(--line); border-radius: 6px; padding: 12px; display: flex; justify-content: center; }
+#board { image-rendering: pixelated; touch-action: none; cursor: crosshair; display: block; }
+.coords { font-family: var(--mono); font-size: 12px; color: var(--parch-dim); min-height: 1.4em; font-variant-numeric: tabular-nums; }
+.palette { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.swatch { width: 28px; height: 28px; border-radius: 4px; border: 2px solid var(--moss); box-shadow: 0 0 0 1px var(--line); padding: 0; }
+.swatch.sel { box-shadow: 0 0 0 2px var(--amber); }
+.swatch.clear { background: repeating-conic-gradient(#555 0 25%, #888 0 50%) 0 0 / 10px 10px; }
+.palette-edit { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--parch-dim); }
+input[type=color] { width: 40px; height: 30px; padding: 0; border: 1px solid var(--line); border-radius: 4px; background: none; }
+
+/* Properties */
+label.field { display: flex; flex-direction: column; gap: 3px; font-size: 13px; color: var(--parch-dim); }
+.field input, .field select, input.txt { background: var(--moss); border: 1px solid var(--line); border-radius: 5px; padding: 6px 8px; color: var(--parch); min-width: 0; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.row > .field { flex: 1; }
+.anchor-row { display: grid; grid-template-columns: 14px 1fr auto auto; gap: 8px; align-items: center; font-size: 14px; }
+.anchor-row .dot { width: 12px; height: 12px; border-radius: 50%; }
+.anchor-row code { font-family: var(--mono); font-size: 12px; color: var(--parch-dim); font-variant-numeric: tabular-nums; }
+.anchor-row.active { color: var(--amber); }
+.checks { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 14px; }
+.hint { font-size: 13px; color: var(--parch-dim); margin: 0; line-height: 1.45; }
+.role { font-size: 13px; padding: 6px 8px; border-radius: 5px; background: var(--board); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; width: 100%; }
+
+.preview-stage { background: #4f8a3a; border-radius: 6px; display: flex; justify-content: center; align-items: flex-end; height: 220px; overflow: hidden; position: relative; }
+#preview { image-rendering: pixelated; display: block; }
+.preview-controls { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.confirm { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 13px; }
+.new-form { display: grid; gap: 8px; }
+.empty { padding: 30px 12px; text-align: center; color: var(--parch-dim); }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--parch); color: var(--moss); padding: 8px 14px; border-radius: 6px; font-weight: 700; z-index: 5; max-width: calc(100% - 32px); }
+.copyline { font-family: var(--mono); font-size: 12px; background: var(--moss); border: 1px solid var(--line); padding: 6px 8px; border-radius: 5px; user-select: all; }
+</style>
+
+<div class="top">
+  <div class="grow">
+    <h1>Underbrush Sprite Workshop</h1>
+    <p>Draw bodies and gear for Underbrush Kingdom. Gear snaps onto a body's anchor points.</p>
+  </div>
+  <span id="status" class="pill">Connecting…</span>
+  <button class="btn" id="btn-download">Download sprites.json</button>
+  <button class="btn primary" id="btn-send">Send to game</button>
+</div>
+<div id="banner" class="banner" hidden></div>
+
+<div class="layout">
+  <aside class="panel shelf" id="shelf">
+    <div class="empty">Loading sprites…</div>
+  </aside>
+
+  <section class="panel stack">
+    <div class="row" style="justify-content: space-between">
+      <h3 id="board-title">—</h3>
+      <span class="coords" id="coords"></span>
+    </div>
+    <div class="toolbar" id="toolbar">
+      <button class="btn sm" data-tool="pencil" title="Pencil (B)">Pencil</button>
+      <button class="btn sm" data-tool="eraser" title="Eraser (E)">Eraser</button>
+      <button class="btn sm" data-tool="fill" title="Fill (G)">Fill</button>
+      <button class="btn sm" data-tool="picker" title="Pick colour (I)">Pick</button>
+      <button class="btn sm" data-tool="move" title="Move all pixels (M)">Move</button>
+      <button class="btn sm" data-tool="anchor" id="tool-anchor" title="Place anchor (A)">Anchor</button>
+      <span class="sep"></span>
+      <button class="btn sm" id="btn-flip" title="Mirror left-right">Mirror</button>
+      <button class="btn sm" id="btn-undo" title="Undo (Ctrl+Z)">Undo</button>
+      <button class="btn sm" id="btn-redo" title="Redo (Ctrl+Shift+Z)">Redo</button>
+      <span class="sep"></span>
+      <label class="row" style="gap:4px;font-size:13px;color:var(--parch-dim)"><input type="checkbox" id="opt-grid" checked> Grid</label>
+      <label class="row" style="gap:4px;font-size:13px;color:var(--parch-dim)"><input type="checkbox" id="opt-ghost" checked> Ghost</label>
+    </div>
+    <div class="board-wrap" id="board-wrap"><canvas id="board" width="10" height="10"></canvas></div>
+    <div class="stack" style="gap:6px">
+      <div class="palette" id="palette"></div>
+      <div class="palette-edit">
+        <span>Selected colour</span><input type="color" id="pal-edit" title="Change this colour everywhere it's used">
+        <span>New colour</span><input type="color" id="pal-new" value="#e9ac4a"><button class="btn sm" id="pal-add">Add</button>
+        <button class="btn sm" id="pal-tidy" title="Remove colours no pixel uses">Remove unused</button>
+      </div>
+    </div>
+    <div class="row">
+      <label class="btn sm" for="file-png" style="display:inline-flex;align-items:center">Import PNG…</label>
+      <input type="file" id="file-png" accept="image/png,image/gif,image/webp" hidden>
+      <button class="btn sm" id="btn-png">Download PNG</button>
+      <label class="btn sm" for="file-json" style="display:inline-flex;align-items:center">Load sprites.json…</label>
+      <input type="file" id="file-json" accept="application/json,.json" hidden>
+    </div>
+    <p class="hint">Importing a PNG replaces the selected sprite's pixels and size (up to 64×64, 62 colours). Transparent pixels stay empty.</p>
+  </section>
+
+  <aside class="stack">
+    <section class="panel stack" id="props"></section>
+    <section class="panel stack">
+      <h2>Fitting room</h2>
+      <div class="preview-stage"><canvas id="preview" width="10" height="10"></canvas></div>
+      <div class="preview-controls" id="pv-bodies"></div>
+      <label class="field">Equip weapon
+        <select id="pv-weapon"></select>
+      </label>
+      <div class="row">
+        <label class="row" style="gap:4px;font-size:13px"><input type="checkbox" id="pv-squish" checked> Squish</label>
+        <label class="row" style="gap:4px;font-size:13px"><input type="checkbox" id="pv-flip"> Face left</label>
+        <label class="row" style="gap:4px;font-size:13px"><input type="checkbox" id="pv-anchors"> Show anchors</label>
+      </div>
+      <p class="hint">This is how the game composes a fighter: back pieces, then the body, then front pieces, each pivot snapped to its anchor.</p>
+    </section>
+  </aside>
+</div>
+<div id="toast" class="toast" hidden></div>
+
+<script>
+(() => {
+'use strict';
+const CHARS = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const PAD = 8;
+const CLASSES = { archer: 'Archer Lizard', knight: 'Beetle Knight', mage: 'Wizard Mouse' };
+const WEAPON_ROLES = { bow: 'Bow', sword: 'Sword', staff: 'Staff' };
+const TIERS = ['Rough', 'Sturdy', 'Fine'];
+const ANCHOR_NAMES = ['hand', 'offhand', 'head', 'chest', 'back'];
+const SLOTS = ['weapon', 'offhand', 'head', 'body', 'back', 'other'];
+const anchorColor = (n) => getComputedStyle(document.documentElement).getPropertyValue(`--a-${ANCHOR_NAMES.includes(n) ? n : 'other'}`).trim();
+
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// ---------- State ----------
+let sheet = { version: 1, bodies: {}, pieces: {} };
+let sel = null;                 // {kind: 'bodies'|'pieces', id}
+let tool = 'pencil';
+let color = 0;                  // palette index; -1 = transparent
+let activeAnchor = 'hand';
+let pvBody = 'archer';
+let pvWeapon = '';
+let db = null, canWrite = true, loaded = false;
+const dirty = new Map();        // "kind/id" -> timer
+const writing = new Set();
+const history = new Map();      // "kind/id" -> {undo: [], redo: []}
+let ui = { newOpen: false, confirmDelete: false, confirmSend: false };
+
+const key = (s = sel) => `${s.kind}/${s.id}`;
+const cur = () => sel && sheet[sel.kind][sel.id];
+
+// ---------- Pixels ----------
+function toIdx(sp) {
+  const a = new Int16Array(sp.w * sp.h).fill(-1);
+  for (let i = 0; i < a.length; i++) { const ch = sp.pixels[i]; if (ch && ch !== '.') a[i] = CHARS.indexOf(ch); }
+  return a;
+}
+function fromIdx(a) { let s = ''; for (const v of a) s += v < 0 ? '.' : CHARS[v]; return s; }
+function hexToRgb(h) { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+function spriteCanvas(sp) {
+  const c = document.createElement('canvas'); c.width = sp.w; c.height = sp.h;
+  const img = new ImageData(sp.w, sp.h); const rgb = sp.palette.map(hexToRgb);
+  for (let i = 0; i < sp.w * sp.h; i++) {
+    const ch = sp.pixels[i]; if (!ch || ch === '.') continue;
+    const v = rgb[CHARS.indexOf(ch)]; if (!v) continue;
+    img.data.set([v[0], v[1], v[2], 255], i * 4);
+  }
+  c.getContext('2d').putImageData(img, 0, 0);
+  return c;
+}
+
+// Same rules as the game's js/sprites.js layout().
+function layout(cls, equippedIds) {
+  const body = sheet.bodies[cls]; if (!body) return [];
+  const eq = equippedIds.map((id) => [id, sheet.pieces[id]]).filter(([, p]) => p);
+  const slots = new Set(eq.map(([, p]) => p.slot));
+  const worn = Object.entries(sheet.pieces).filter(([id, p]) => (p.wornBy || []).includes(cls) && !slots.has(p.slot) && !equippedIds.includes(id));
+  const parts = [...worn, ...eq].map(([id, p]) => {
+    const a = body.anchors?.[p.anchor] || { x: Math.floor(body.w / 2), y: Math.floor(body.h / 2) };
+    return { id, sprite: p, layer: p.layer === 'back' ? 'back' : 'front', x: PAD + a.x - p.pivot.x, y: PAD + a.y - p.pivot.y };
+  });
+  return [...parts.filter((p) => p.layer === 'back'), { id: cls, sprite: body, layer: 'body', x: PAD, y: PAD }, ...parts.filter((p) => p.layer === 'front')];
+}
+
+function roleOf(id, p) {
+  const m = /^(bow|sword|staff)-([123])$/.exec(id);
+  const bits = [];
+  if (m) bits.push(`In game: ${TIERS[m[2] - 1]} ${WEAPON_ROLES[m[1]]} (tier ${m[2]})`);
+  if (p.wornBy?.length) bits.push(`Always worn by ${p.wornBy.map((c) => CLASSES[c]).join(', ')}`);
+  return bits.length ? bits.join(' · ') : 'Not used in game yet. Name it bow-1…staff-3 to make it a weapon tier, or tick "Always worn by".';
+}
+
+// ---------- History ----------
+function snapshot() { return JSON.stringify(cur()); }
+function pushUndo() {
+  const k = key(); if (!history.has(k)) history.set(k, { undo: [], redo: [] });
+  const h = history.get(k); h.undo.push(snapshot()); if (h.undo.length > 60) h.undo.shift(); h.redo.length = 0;
+}
+function restore(json) { sheet[sel.kind][sel.id] = JSON.parse(json); changed(); }
+function undo() { const h = history.get(key()); if (!h?.undo.length) return; h.redo.push(snapshot()); restore(h.undo.pop()); }
+function redo() { const h = history.get(key()); if (!h?.redo.length) return; h.undo.push(snapshot()); restore(h.redo.pop()); }
+
+// ---------- Saving ----------
+function setStatus(text, cls = '') { const s = $('#status'); s.textContent = text; s.className = 'pill ' + cls; }
+function refreshStatus() {
+  if (!db) return setStatus(loaded ? 'Saved in this browser' : 'Not connected', 'bad');
+  if (!canWrite) return setStatus('View only', 'bad');
+  if (dirty.size || writing.size) return setStatus('Saving…', 'busy');
+  setStatus('All changes saved', 'ok');
+}
+function saveLocal() { try { localStorage.setItem('sprite-workshop-sheet', JSON.stringify(sheet)); } catch {} }
+function schedule(s = sel) {
+  const k = key(s);
+  saveLocal();
+  if (!db || !canWrite) { refreshStatus(); return; }
+  clearTimeout(dirty.get(k));
+  dirty.set(k, setTimeout(() => flush(s), 700));
+  refreshStatus();
+}
+async function flush(s) {
+  const k = key(s);
+  dirty.delete(k);
+  if (writing.has(k)) { schedule(s); return; }
+  const data = sheet[s.kind][s.id];
+  writing.add(k); refreshStatus();
+  try {
+    if (data) await db.doc(k).set(JSON.parse(JSON.stringify(data)));
+    else await db.doc(k).delete();
+  } catch (e) {
+    if (e?.code === 'invalid_argument') { canWrite = false; showBanner('This workshop is view only for you. Changes stay in your browser; download sprites.json to keep them.'); }
+    else toast(`Couldn't save ${s.id}: ${e?.message || e}`);
+  } finally { writing.delete(k); refreshStatus(); }
+}
+window.addEventListener('beforeunload', () => { for (const [k, t] of dirty) { clearTimeout(t); const [kind, id] = k.split('/'); flush({ kind, id }); } });
+
+function showBanner(t) { const b = $('#banner'); b.textContent = t; b.hidden = !t; }
+function toast(t) { const el = $('#toast'); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (el.hidden = true), 2600); }
+
+// ---------- Rendering ----------
+function changed() { schedule(); renderShelfThumb(sel); drawBoard(); renderPalette(); renderProps(); }
+
+function renderShelf() {
+  const el = $('#shelf');
+  if (!loaded) return;
+  const bodies = Object.keys(sheet.bodies), pieces = Object.keys(sheet.pieces).sort();
+  if (!bodies.length && !pieces.length) {
+    el.innerHTML = `<div class="empty">No sprites yet. Load a sprites.json file to start.</div>`;
+    return;
+  }
+  const item = (kind, id, sp) => `<button class="shelf-item ${sel && sel.kind === kind && sel.id === id ? 'sel' : ''}" data-kind="${kind}" data-id="${esc(id)}">
+      <canvas width="1" height="1"></canvas><span class="meta"><b>${esc(sp.name || id)}</b><span>${esc(id)} · ${sp.w}×${sp.h}</span></span></button>`;
+  el.innerHTML = `
+    <div class="shelf-group"><h2>Bodies</h2><div class="shelf-items">${bodies.map((id) => item('bodies', id, sheet.bodies[id])).join('')}</div></div>
+    <div class="shelf-group"><h2>Gear</h2><div class="shelf-items">${pieces.map((id) => item('pieces', id, sheet.pieces[id])).join('')}</div></div>
+    <button class="btn sm" id="btn-new">New gear piece</button>
+    ${ui.newOpen ? newForm() : ''}`;
+  el.querySelectorAll('.shelf-item').forEach((b) => renderShelfThumb({ kind: b.dataset.kind, id: b.dataset.id }, b));
+}
+function renderShelfThumb(s, btn) {
+  btn = btn || [...document.querySelectorAll('.shelf-item')].find((b) => b.dataset.kind === s.kind && b.dataset.id === s.id);
+  const sp = sheet[s.kind][s.id]; if (!btn || !sp) return;
+  const c = btn.querySelector('canvas'); const n = Math.max(sp.w, sp.h);
+  c.width = n; c.height = n;
+  const ctx = c.getContext('2d'); ctx.clearRect(0, 0, n, n);
+  ctx.drawImage(spriteCanvas(sp), Math.floor((n - sp.w) / 2), n - sp.h);
+}
+function newForm() {
+  return `<form class="new-form panel" id="new-form" style="padding:10px">
+    <label class="field">Name<input id="nf-name" required placeholder="Leaf hood" maxlength="40"></label>
+    <label class="field">ID <input id="nf-id" required pattern="[a-z0-9][a-z0-9-]{0,39}" placeholder="leaf-hood"></label>
+    <div class="row"><label class="field">Size<select id="nf-size"><option>16</option><option selected>24</option><option>32</option><option>48</option></select></label>
+      <label class="field">Slot<select id="nf-slot">${SLOTS.map((s) => `<option>${s}</option>`).join('')}</select></label></div>
+    <p class="hint">Use bow-1 to bow-3, sword-1 to sword-3 or staff-1 to staff-3 as the ID to replace a game weapon tier.</p>
+    <div class="row"><button class="btn sm primary">Create</button><button type="button" class="btn sm" id="nf-cancel">Cancel</button></div>
+  </form>`;
+}
+
+let boardZoom = 16;
+function drawBoard() {
+  const sp = cur(); const c = $('#board'); const ctx = c.getContext('2d');
+  if (!sp) { $('#board-title').textContent = '—'; c.width = c.height = 10; return; }
+  $('#board-title').textContent = `${sp.name || sel.id}`;
+  const wrap = $('#board-wrap');
+  const avail = Math.max(200, wrap.clientWidth - 26);
+  boardZoom = Math.max(6, Math.min(24, Math.floor(Math.min(avail, 640) / Math.max(sp.w, sp.h))));
+  const z = boardZoom;
+  c.width = sp.w * z; c.height = sp.h * z;
+  // checkerboard
+  for (let y = 0; y < sp.h; y++) for (let x = 0; x < sp.w; x++) {
+    ctx.fillStyle = (x + y) % 2 ? '#2c3a30' : '#334437'; ctx.fillRect(x * z, y * z, z, z);
+  }
+  // ghost: when editing gear, show the fitting-room body faintly so you can line it up
+  if ($('#opt-ghost').checked && sel.kind === 'pieces' && sheet.bodies[pvBody]) {
+    const body = sheet.bodies[pvBody]; const a = body.anchors?.[sp.anchor];
+    if (a) {
+      ctx.globalAlpha = 0.28; ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(spriteCanvas(body), (sp.pivot.x - a.x) * z, (sp.pivot.y - a.y) * z, body.w * z, body.h * z);
+      ctx.globalAlpha = 1;
+    }
+  }
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(spriteCanvas(sp), 0, 0, sp.w * z, sp.h * z);
+  if ($('#opt-grid').checked && z >= 6) {
+    ctx.strokeStyle = 'rgba(239,227,194,0.09)'; ctx.lineWidth = 1; ctx.beginPath();
+    for (let x = 1; x < sp.w; x++) { ctx.moveTo(x * z + 0.5, 0); ctx.lineTo(x * z + 0.5, sp.h * z); }
+    for (let y = 1; y < sp.h; y++) { ctx.moveTo(0, y * z + 0.5); ctx.lineTo(sp.w * z, y * z + 0.5); }
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(239,227,194,0.22)'; ctx.beginPath();
+    for (let x = 8; x < sp.w; x += 8) { ctx.moveTo(x * z + 0.5, 0); ctx.lineTo(x * z + 0.5, sp.h * z); }
+    for (let y = 8; y < sp.h; y += 8) { ctx.moveTo(0, y * z + 0.5); ctx.lineTo(sp.w * z, y * z + 0.5); }
+    ctx.stroke();
+  }
+  const mark = (x, y, col, label, bold) => {
+    ctx.strokeStyle = col; ctx.lineWidth = bold ? 3 : 2;
+    ctx.strokeRect(x * z + 1.5, y * z + 1.5, z - 3, z - 3);
+    ctx.beginPath(); ctx.moveTo(x * z + z / 2, y * z - z * 0.6); ctx.lineTo(x * z + z / 2, y * z + z * 1.6);
+    ctx.moveTo(x * z - z * 0.6, y * z + z / 2); ctx.lineTo(x * z + z * 1.6, y * z + z / 2); ctx.lineWidth = 1; ctx.stroke();
+    ctx.font = `600 ${Math.max(10, Math.min(13, z * 0.7))}px 'JetBrains Mono', monospace`;
+    ctx.fillStyle = '#141f17'; ctx.fillText(label, x * z + z + 4, y * z - 2 + 1);
+    ctx.fillStyle = col; ctx.fillText(label, x * z + z + 3, y * z - 2);
+  };
+  if (sel.kind === 'bodies') for (const [n, a] of Object.entries(sp.anchors || {})) mark(a.x, a.y, anchorColor(n), n, n === activeAnchor && tool === 'anchor');
+  else mark(sp.pivot.x, sp.pivot.y, anchorColor(sp.anchor), `pivot → ${sp.anchor}`, tool === 'anchor');
+  $('#btn-undo').disabled = !history.get(key())?.undo.length;
+  $('#btn-redo').disabled = !history.get(key())?.redo.length;
+}
+
+function renderPalette() {
+  const sp = cur(); const el = $('#palette');
+  if (!sp) { el.innerHTML = ''; return; }
+  if (color >= sp.palette.length) color = sp.palette.length - 1;
+  el.innerHTML = `<button class="swatch clear ${color < 0 ? 'sel' : ''}" data-color="-1" title="Transparent"></button>` +
+    sp.palette.map((h, i) => `<button class="swatch ${i === color ? 'sel' : ''}" data-color="${i}" style="background:${h}" title="${h}"></button>`).join('');
+  $('#pal-edit').disabled = color < 0;
+  if (color >= 0) $('#pal-edit').value = sp.palette[color];
+  $('#pal-add').disabled = sp.palette.length >= CHARS.length;
+}
+
+function renderProps() {
+  const sp = cur(); const el = $('#props');
+  if (!sp) { el.innerHTML = '<p class="hint">Pick a sprite from the shelf.</p>'; return; }
+  const sizeRow = `<div class="row">
+      <label class="field">Width<input type="number" id="pr-w" min="4" max="64" value="${sp.w}"></label>
+      <label class="field">Height<input type="number" id="pr-h" min="4" max="64" value="${sp.h}"></label>
+      <button class="btn sm" id="pr-resize" style="align-self:flex-end">Resize</button></div>`;
+  if (sel.kind === 'bodies') {
+    const anchors = Object.entries(sp.anchors || {});
+    el.innerHTML = `
+      <h2>Body · ${esc(CLASSES[sel.id] || sel.id)}</h2>
+      <label class="field">Name<input id="pr-name" value="${esc(sp.name || '')}" maxlength="40"></label>
+      ${sizeRow}
+      <p class="hint">Resizing keeps the feet anchored at the bottom centre.</p>
+      <hr>
+      <h2>Anchor points</h2>
+      <p class="hint">Choose an anchor, then click the board with the Anchor tool to move it. Gear attaches by anchor name.</p>
+      ${anchors.map(([n, a]) => `<div class="anchor-row ${n === activeAnchor ? 'active' : ''}">
+        <span class="dot" style="background:${anchorColor(n)}"></span><span>${esc(n)}</span><code>${a.x}, ${a.y}</code>
+        <span class="row" style="gap:4px"><button class="btn sm ${n === activeAnchor && tool === 'anchor' ? 'on' : ''}" data-place="${esc(n)}">Place</button><button class="btn sm danger" data-unanchor="${esc(n)}" title="Remove anchor">×</button></span></div>`).join('')}
+      <form class="row" id="add-anchor"><input class="txt" id="aa-name" placeholder="new anchor, e.g. tail" pattern="[a-z][a-z0-9-]{0,19}" style="flex:1" list="anchor-names"><button class="btn sm">Add</button></form>
+      <datalist id="anchor-names">${ANCHOR_NAMES.filter((n) => !sp.anchors?.[n]).map((n) => `<option value="${n}">`).join('')}</datalist>`;
+  } else {
+    const anchorOpts = new Set([...ANCHOR_NAMES, ...Object.values(sheet.bodies).flatMap((b) => Object.keys(b.anchors || {}))]);
+    el.innerHTML = `
+      <h2>Gear · ${esc(sel.id)}</h2>
+      <div class="role">${esc(roleOf(sel.id, sp))}</div>
+      <label class="field">Name<input id="pr-name" value="${esc(sp.name || '')}" maxlength="40"></label>
+      ${sizeRow}
+      <div class="row">
+        <label class="field">Slot<select id="pr-slot">${SLOTS.map((s) => `<option ${s === sp.slot ? 'selected' : ''}>${s}</option>`).join('')}</select></label>
+        <label class="field">Attaches to<select id="pr-anchor">${[...anchorOpts].map((s) => `<option ${s === sp.anchor ? 'selected' : ''}>${s}</option>`).join('')}</select></label>
+      </div>
+      <label class="field">Drawn<select id="pr-layer"><option value="front" ${sp.layer !== 'back' ? 'selected' : ''}>In front of the body</option><option value="back" ${sp.layer === 'back' ? 'selected' : ''}>Behind the body</option></select></label>
+      <div class="row" style="justify-content:space-between"><span class="hint">Pivot <code style="font-family:var(--mono)">${sp.pivot.x}, ${sp.pivot.y}</code>: the pixel that lands on the anchor.</span>
+        <button class="btn sm ${tool === 'anchor' ? 'on' : ''}" data-place="pivot">Place pivot</button></div>
+      <div class="stack" style="gap:4px"><span class="hint">Always worn by (armour, hats, default weapons):</span>
+        <div class="checks">${Object.entries(CLASSES).map(([c, n]) => `<label class="row" style="gap:4px"><input type="checkbox" data-worn="${c}" ${(sp.wornBy || []).includes(c) ? 'checked' : ''}> ${n}</label>`).join('')}</div></div>
+      <p class="hint">An equipped weapon replaces any always-worn piece in the same slot.</p>
+      <hr>
+      <div class="row"><button class="btn sm" id="pr-dup">Duplicate</button>
+        ${ui.confirmDelete ? `<span class="confirm">Delete ${esc(sel.id)} for good? <button class="btn sm danger" id="pr-del-yes">Delete</button><button class="btn sm" id="pr-del-no">Keep</button></span>`
+          : `<button class="btn sm danger" id="pr-del">Delete…</button>`}</div>`;
+  }
+  document.querySelectorAll('[data-tool]').forEach((b) => b.classList.toggle('on', b.dataset.tool === tool));
+  $('#tool-anchor').textContent = sel.kind === 'pieces' ? 'Pivot' : 'Anchor';
+}
+
+function renderPreviewControls() {
+  $('#pv-bodies').innerHTML = Object.keys(sheet.bodies).map((c) => `<button class="btn sm ${c === pvBody ? 'on' : ''}" data-pv="${c}">${esc(sheet.bodies[c].name || c)}</button>`).join('');
+  const opts = Object.entries(sheet.pieces).filter(([, p]) => p.slot === 'weapon');
+  $('#pv-weapon').innerHTML = `<option value="">Nothing extra</option>` + opts.map(([id, p]) => `<option value="${esc(id)}" ${id === pvWeapon ? 'selected' : ''}>${esc(p.name || id)} (${esc(id)})</option>`).join('');
+}
+
+// Preview: drawn at 4x with the same squash-and-stretch the camp uses.
+const PV_SCALE = 4;
+function drawPreview(t) {
+  const c = $('#preview'); const ctx = c.getContext('2d');
+  const body = sheet.bodies[pvBody]; if (!body) return;
+  const W = body.w + PAD * 2, H = body.h + PAD * 2;
+  if (c.width !== W * PV_SCALE) { c.width = W * PV_SCALE; c.height = H * PV_SCALE; c.style.width = `${W * PV_SCALE}px`; c.style.height = `${H * PV_SCALE}px`; }
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, c.width, c.height);
+  const comp = document.createElement('canvas'); comp.width = W; comp.height = H;
+  const cc = comp.getContext('2d');
+  const parts = layout(pvBody, pvWeapon ? [pvWeapon] : []);
+  for (const p of parts) cc.drawImage(spriteCanvas(p.sprite), p.x, p.y);
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const k = $('#pv-squish').checked && !reduce ? Math.sin(t * 6) : 0;
+  const sy = 1 + 0.1 * k, sx = 1 - 0.07 * k, flip = $('#pv-flip').checked ? -1 : 1;
+  const fx = (PAD + body.w / 2) * PV_SCALE, fy = (PAD + body.h) * PV_SCALE;
+  ctx.fillStyle = 'rgba(20,40,18,.35)'; ctx.beginPath(); ctx.ellipse(fx, fy - 2, 9 * PV_SCALE * sx, 2.5 * PV_SCALE, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.imageSmoothingEnabled = false;
+  ctx.translate(fx, fy); ctx.scale(flip * sx * PV_SCALE, sy * PV_SCALE);
+  ctx.drawImage(comp, -(PAD + body.w / 2), -(PAD + body.h));
+  if ($('#pv-anchors').checked) {
+    for (const [n, a] of Object.entries(body.anchors || {})) {
+      ctx.fillStyle = anchorColor(n); ctx.fillRect(a.x - body.w / 2, a.y - body.h, 1, 1);
+    }
+  }
+}
+(function loop(t) { if (loaded) drawPreview(t / 1000); requestAnimationFrame(loop); })(0);
+
+// ---------- Board interaction ----------
+let stroke = null;
+function cellAt(ev) {
+  const c = $('#board'); const r = c.getBoundingClientRect(); const sp = cur();
+  const x = Math.floor(((ev.clientX - r.left) / r.width) * sp.w), y = Math.floor(((ev.clientY - r.top) / r.height) * sp.h);
+  return { x, y, inside: x >= 0 && y >= 0 && x < sp.w && y < sp.h };
+}
+function paint(sp, a, x, y, v) { if (x >= 0 && y >= 0 && x < sp.w && y < sp.h) a[y * sp.w + x] = v; }
+function line(sp, a, x0, y0, x1, y1, v) {
+  const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1; let e = dx + dy;
+  for (;;) { paint(sp, a, x0, y0, v); if (x0 === x1 && y0 === y1) break; const e2 = 2 * e; if (e2 >= dy) { e += dy; x0 += sx; } if (e2 <= dx) { e += dx; y0 += sy; } }
+}
+function fill(sp, a, x, y, v) {
+  const target = a[y * sp.w + x]; if (target === v) return;
+  const st = [[x, y]];
+  while (st.length) { const [cx, cy] = st.pop(); if (cx < 0 || cy < 0 || cx >= sp.w || cy >= sp.h || a[cy * sp.w + cx] !== target) continue; a[cy * sp.w + cx] = v; st.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]); }
+}
+function canEdit() { if (!canWrite && db) { toast('This workshop is view only for you.'); return false; } return true; }
+
+$('#board').addEventListener('pointerdown', (ev) => {
+  const sp = cur(); if (!sp || !canEdit()) return;
+  const p = cellAt(ev); if (!p.inside && tool !== 'move') return;
+  $('#board').setPointerCapture(ev.pointerId);
+  if (tool === 'picker') { const v = toIdx(sp)[p.y * sp.w + p.x]; color = v; renderPalette(); tool = v < 0 ? 'eraser' : 'pencil'; renderProps(); return; }
+  pushUndo();
+  if (tool === 'anchor') {
+    if (sel.kind === 'bodies') { sp.anchors = sp.anchors || {}; sp.anchors[activeAnchor] = { x: p.x, y: p.y }; }
+    else sp.pivot = { x: p.x, y: p.y };
+    stroke = { anchor: true }; changed(); return;
+  }
+  const a = toIdx(sp);
+  if (tool === 'fill') { fill(sp, a, p.x, p.y, color); sp.pixels = fromIdx(a); changed(); return; }
+  if (tool === 'move') { stroke = { move: true, x: p.x, y: p.y, base: a, anchors: JSON.stringify(sp.anchors || null), pivot: { ...sp.pivot } }; return; }
+  const v = tool === 'eraser' ? -1 : color;
+  paint(sp, a, p.x, p.y, v); sp.pixels = fromIdx(a);
+  stroke = { x: p.x, y: p.y, v, a };
+  drawBoard();
+});
+$('#board').addEventListener('pointermove', (ev) => {
+  const sp = cur(); if (!sp) return;
+  const p = cellAt(ev);
+  $('#coords').textContent = p.inside ? `x ${p.x}, y ${p.y}` : '';
+  if (!stroke) return;
+  if (stroke.anchor) {
+    if (!p.inside) return;
+    if (sel.kind === 'bodies') sp.anchors[activeAnchor] = { x: p.x, y: p.y }; else sp.pivot = { x: p.x, y: p.y };
+    drawBoard(); return;
+  }
+  if (stroke.move) {
+    const dx = p.x - stroke.x, dy = p.y - stroke.y; const out = new Int16Array(stroke.base.length).fill(-1);
+    for (let y = 0; y < sp.h; y++) for (let x = 0; x < sp.w; x++) { const v = stroke.base[y * sp.w + x]; if (v >= 0) paint(sp, out, x + dx, y + dy, v); }
+    sp.pixels = fromIdx(out);
+    // Anchors and pivot travel with the art.
+    const base = JSON.parse(stroke.anchors);
+    if (base) for (const n of Object.keys(base)) sp.anchors[n] = { x: base[n].x + dx, y: base[n].y + dy };
+    if (sel.kind === 'pieces') sp.pivot = { x: stroke.pivot.x + dx, y: stroke.pivot.y + dy };
+    drawBoard(); return;
+  }
+  line(sp, stroke.a, stroke.x, stroke.y, p.x, p.y, stroke.v); stroke.x = p.x; stroke.y = p.y;
+  sp.pixels = fromIdx(stroke.a); drawBoard();
+});
+const endStroke = () => { if (stroke) { stroke = null; changed(); } };
+$('#board').addEventListener('pointerup', endStroke);
+$('#board').addEventListener('pointercancel', endStroke);
+$('#board').addEventListener('pointerleave', () => ($('#coords').textContent = ''));
+
+// ---------- Controls ----------
+document.addEventListener('click', (ev) => {
+  const t = ev.target.closest('button'); if (!t) return;
+  if (t.matches('.shelf-item')) { select({ kind: t.dataset.kind, id: t.dataset.id }); return; }
+  if (t.dataset.tool) { tool = t.dataset.tool; renderProps(); drawBoard(); return; }
+  if (t.dataset.color !== undefined) { color = Number(t.dataset.color); if (tool === 'eraser' && color >= 0) tool = 'pencil'; renderPalette(); renderProps(); return; }
+  if (t.dataset.place) { tool = 'anchor'; if (t.dataset.place !== 'pivot') activeAnchor = t.dataset.place; renderProps(); drawBoard(); return; }
+  if (t.dataset.unanchor && canEdit()) { pushUndo(); delete cur().anchors[t.dataset.unanchor]; changed(); return; }
+  if (t.dataset.pv) { pvBody = t.dataset.pv; renderPreviewControls(); drawBoard(); return; }
+  switch (t.id) {
+    case 'btn-undo': undo(); break;
+    case 'btn-redo': redo(); break;
+    case 'btn-flip': if (canEdit()) mirror(); break;
+    case 'pal-add': if (canEdit()) { pushUndo(); cur().palette.push($('#pal-new').value); color = cur().palette.length - 1; tool = 'pencil'; changed(); } break;
+    case 'pal-tidy': if (canEdit()) tidyPalette(); break;
+    case 'pr-resize': if (canEdit()) resize(Number($('#pr-w').value), Number($('#pr-h').value)); break;
+    case 'pr-dup': if (canEdit()) duplicate(); break;
+    case 'pr-del': ui.confirmDelete = true; renderProps(); break;
+    case 'pr-del-no': ui.confirmDelete = false; renderProps(); break;
+    case 'pr-del-yes': if (canEdit()) removePiece(); break;
+    case 'btn-new': ui.newOpen = !ui.newOpen; renderShelf(); if (ui.newOpen) $('#nf-name').focus(); break;
+    case 'nf-cancel': ui.newOpen = false; renderShelf(); break;
+    case 'btn-download': downloadJson(); break;
+    case 'btn-send': sendToGame(); break;
+    case 'btn-png': downloadPng(); break;
+  }
+});
+
+document.addEventListener('change', (ev) => {
+  const t = ev.target; const sp = cur();
+  if (t.id === 'pv-weapon') { pvWeapon = t.value; return; }
+  if (['opt-grid', 'opt-ghost'].includes(t.id)) { drawBoard(); return; }
+  if (t.id === 'file-json') { importJson(t.files[0]); t.value = ''; return; }
+  if (!sp) return;
+  if (t.id === 'file-png') { importPng(t.files[0]); t.value = ''; return; }
+  if (t.id === 'pal-edit' && color >= 0 && canEdit()) { pushUndo(); sp.palette[color] = t.value; changed(); return; }
+  if (t.id === 'pr-name' && canEdit()) { pushUndo(); sp.name = t.value.trim(); changed(); renderShelf(); renderPreviewControls(); return; }
+  if (['pr-slot', 'pr-anchor', 'pr-layer'].includes(t.id) && canEdit()) { pushUndo(); sp[t.id.slice(3)] = t.value; changed(); renderPreviewControls(); return; }
+  if (t.dataset.worn && canEdit()) {
+    pushUndo(); const s = new Set(sp.wornBy || []); t.checked ? s.add(t.dataset.worn) : s.delete(t.dataset.worn); sp.wornBy = [...s]; changed(); return;
+  }
+});
+
+document.addEventListener('submit', (ev) => {
+  ev.preventDefault();
+  if (ev.target.id === 'add-anchor' && canEdit()) {
+    const n = $('#aa-name').value.trim(); if (!n) return; const sp = cur();
+    pushUndo(); sp.anchors = sp.anchors || {}; if (!sp.anchors[n]) sp.anchors[n] = { x: Math.floor(sp.w / 2), y: Math.floor(sp.h / 2) };
+    activeAnchor = n; tool = 'anchor'; changed();
+  }
+  if (ev.target.id === 'new-form' && canEdit()) {
+    const id = $('#nf-id').value.trim();
+    if (sheet.pieces[id]) { toast(`There's already a piece called ${id}.`); return; }
+    const n = Number($('#nf-size').value);
+    sheet.pieces[id] = { name: $('#nf-name').value.trim() || id, w: n, h: n, palette: ['#141414', '#e9ac4a'], pixels: '.'.repeat(n * n),
+      slot: $('#nf-slot').value, anchor: $('#nf-slot').value === 'weapon' ? 'hand' : ($('#nf-slot').value === 'body' ? 'chest' : ANCHOR_NAMES.includes($('#nf-slot').value) ? $('#nf-slot').value : 'chest'),
+      pivot: { x: Math.floor(n / 2), y: Math.floor(n / 2) }, layer: 'front', wornBy: [] };
+    ui.newOpen = false;
+    select({ kind: 'pieces', id }); schedule(); renderPreviewControls();
+    toast(`Created ${id}`);
+  }
+});
+document.addEventListener('input', (ev) => {
+  if (ev.target.id === 'nf-name') { const idEl = $('#nf-id'); if (!idEl.dataset.touched) idEl.value = ev.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40); }
+  if (ev.target.id === 'nf-id') ev.target.dataset.touched = '1';
+});
+
+document.addEventListener('keydown', (ev) => {
+  if (ev.target.matches('input, select, textarea')) return;
+  const k = ev.key.toLowerCase();
+  if ((ev.ctrlKey || ev.metaKey) && k === 'z') { ev.preventDefault(); ev.shiftKey ? redo() : undo(); return; }
+  if ((ev.ctrlKey || ev.metaKey) && k === 'y') { ev.preventDefault(); redo(); return; }
+  const map = { b: 'pencil', e: 'eraser', g: 'fill', i: 'picker', m: 'move', a: 'anchor' };
+  if (map[k] && !ev.ctrlKey && !ev.metaKey) { tool = map[k]; renderProps(); drawBoard(); }
+});
+window.addEventListener('resize', () => drawBoard());
+
+function select(s) {
+  sel = s; ui.confirmDelete = false;
+  const sp = cur();
+  if (s.kind === 'bodies') { pvBody = s.id; if (!sp.anchors?.[activeAnchor]) activeAnchor = Object.keys(sp.anchors || {})[0] || 'hand'; }
+  else {
+    const m = /^(bow|sword|staff)-/.exec(s.id);
+    if (sp.slot === 'weapon') pvWeapon = s.id;
+    if (m) pvBody = { bow: 'archer', sword: 'knight', staff: 'mage' }[m[1]];
+    else if (sp.wornBy?.length) pvBody = sp.wornBy[0];
+  }
+  if (color >= sp.palette.length) color = 0;
+  renderShelf(); drawBoard(); renderPalette(); renderProps(); renderPreviewControls();
+}
+
+function mirror() {
+  const sp = cur(); pushUndo(); const a = toIdx(sp); const out = new Int16Array(a.length);
+  for (let y = 0; y < sp.h; y++) for (let x = 0; x < sp.w; x++) out[y * sp.w + x] = a[y * sp.w + (sp.w - 1 - x)];
+  sp.pixels = fromIdx(out);
+  if (sp.anchors) for (const n of Object.keys(sp.anchors)) sp.anchors[n].x = sp.w - 1 - sp.anchors[n].x;
+  if (sp.pivot) sp.pivot.x = sp.w - 1 - sp.pivot.x;
+  changed();
+}
+function tidyPalette() {
+  const sp = cur(); const a = toIdx(sp); const used = [...new Set(a)].filter((v) => v >= 0).sort((x, y) => x - y);
+  if (used.length === sp.palette.length) { toast('Every colour is in use.'); return; }
+  pushUndo(); const remap = new Map(used.map((v, i) => [v, i]));
+  sp.palette = used.map((v) => sp.palette[v]); sp.pixels = fromIdx(a.map((v) => (v < 0 ? -1 : remap.get(v))));
+  color = Math.min(color, sp.palette.length - 1); changed();
+}
+function resize(w, h) {
+  w = Math.max(4, Math.min(64, w | 0)); h = Math.max(4, Math.min(64, h | 0));
+  const sp = cur(); if (w === sp.w && h === sp.h) return; pushUndo();
+  const a = toIdx(sp); const out = new Int16Array(w * h).fill(-1);
+  // Bodies keep their feet: bottom-centre. Gear keeps its centre.
+  const dx = Math.floor((w - sp.w) / 2), dy = sel.kind === 'bodies' ? h - sp.h : Math.floor((h - sp.h) / 2);
+  for (let y = 0; y < sp.h; y++) for (let x = 0; x < sp.w; x++) { const nx = x + dx, ny = y + dy; if (nx >= 0 && ny >= 0 && nx < w && ny < h) out[ny * w + nx] = a[y * sp.w + x]; }
+  sp.w = w; sp.h = h; sp.pixels = fromIdx(out);
+  if (sp.anchors) for (const n of Object.keys(sp.anchors)) sp.anchors[n] = { x: sp.anchors[n].x + dx, y: sp.anchors[n].y + dy };
+  if (sp.pivot) sp.pivot = { x: sp.pivot.x + dx, y: sp.pivot.y + dy };
+  changed(); renderShelf();
+}
+function duplicate() {
+  const base = sel.id.replace(/-copy\d*$/, ''); let id = `${base}-copy`, i = 2;
+  while (sheet.pieces[id]) id = `${base}-copy${i++}`;
+  if (sel.kind === 'bodies') { toast('Bodies are fixed to the three classes; duplicate a gear piece instead.'); return; }
+  sheet.pieces[id] = JSON.parse(JSON.stringify({ ...cur(), name: `${cur().name || sel.id} copy` }));
+  select({ kind: 'pieces', id }); schedule();
+}
+function removePiece() {
+  const s = { ...sel }; delete sheet.pieces[s.id]; history.delete(key(s));
+  ui.confirmDelete = false; schedule(s);
+  const next = Object.keys(sheet.pieces)[0];
+  select(next ? { kind: 'pieces', id: next } : { kind: 'bodies', id: Object.keys(sheet.bodies)[0] });
+  toast(`Deleted ${s.id}`);
+}
+
+// ---------- Import / export ----------
+function importPng(file) {
+  if (!file || !canEdit()) return;
+  const img = new Image(); const url = URL.createObjectURL(file);
+  img.onload = () => {
+    URL.revokeObjectURL(url);
+    if (img.width > 64 || img.height > 64) { toast(`That image is ${img.width}×${img.height}. Sprites can be at most 64×64.`); return; }
+    const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+    const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0); const d = ctx.getImageData(0, 0, c.width, c.height).data;
+    const pal = []; const a = new Int16Array(c.width * c.height).fill(-1);
+    for (let i = 0; i < a.length; i++) {
+      if (d[i * 4 + 3] < 128) continue;
+      const h = '#' + [d[i * 4], d[i * 4 + 1], d[i * 4 + 2]].map((v) => v.toString(16).padStart(2, '0')).join('');
+      let k = pal.indexOf(h); if (k < 0) { k = pal.length; pal.push(h); }
+      if (k >= CHARS.length) { toast(`That image has more than ${CHARS.length} colours. Reduce its palette and try again.`); return; }
+      a[i] = k;
+    }
+    const sp = cur(); pushUndo();
+    const ox = sel.kind === 'bodies' ? Math.floor((c.width - sp.w) / 2) : 0, oy = sel.kind === 'bodies' ? c.height - sp.h : 0;
+    if (sp.anchors) for (const n of Object.keys(sp.anchors)) sp.anchors[n] = { x: sp.anchors[n].x + ox, y: sp.anchors[n].y + oy };
+    if (sp.pivot && (c.width !== sp.w || c.height !== sp.h)) sp.pivot = { x: Math.min(c.width - 1, sp.pivot.x), y: Math.min(c.height - 1, sp.pivot.y) };
+    sp.w = c.width; sp.h = c.height; sp.palette = pal.length ? pal : ['#141414']; sp.pixels = fromIdx(a);
+    color = 0; changed(); renderShelf(); toast(`Imported ${file.name}`);
+  };
+  img.onerror = () => toast("That file couldn't be read as an image.");
+  img.src = url;
+}
+async function importJson(file) {
+  if (!file || !canEdit()) return;
+  try {
+    const data = JSON.parse(await file.text());
+    if (!data.bodies || !data.pieces) throw new Error('missing bodies or pieces');
+    const before = { ...sheet };
+    for (const kind of ['bodies', 'pieces']) for (const id of Object.keys(before[kind])) if (!data[kind][id]) { delete sheet[kind][id]; schedule({ kind, id }); }
+    for (const kind of ['bodies', 'pieces']) for (const [id, sp] of Object.entries(data[kind])) { sheet[kind][id] = sp; schedule({ kind, id }); }
+    history.clear(); loaded = true;
+    select({ kind: 'bodies', id: Object.keys(sheet.bodies)[0] });
+    toast(`Loaded ${Object.keys(data.bodies).length} bodies and ${Object.keys(data.pieces).length} gear pieces`);
+  } catch (e) { toast(`That isn't a sprites.json file (${e.message}).`); }
+}
+function exportSheet() {
+  const sortObj = (o) => Object.fromEntries(Object.keys(o).sort().map((k) => [k, o[k]]));
+  return JSON.stringify({ version: 1, bodies: sortObj(sheet.bodies), pieces: sortObj(sheet.pieces) }, null, 1);
+}
+async function save(filename, data) {
+  const dl = await window.claude?.use?.('downloads');
+  if (!dl) { toast('Downloads are not available in this view.'); return; }
+  try { await dl.save({ filename, data }); } catch (e) { if (e?.code !== 'declined') toast(`Download failed: ${e?.message || e}`); }
+}
+function downloadJson() { save('sprites.json', exportSheet()); }
+function downloadPng() {
+  const sp = cur(); if (!sp) return;
+  spriteCanvas(sp).toBlob((b) => save(`${sel.id}.png`, b), 'image/png');
+}
+async function sendToGame() {
+  if (!db) { toast('Not connected. Download sprites.json and add it to the repo instead.'); return; }
+  if (!canEdit()) return;
+  for (const [k, t] of dirty) { clearTimeout(t); const [kind, id] = k.split('/'); await flush({ kind, id }); }
+  try {
+    await db.doc('meta/release').set({ requestedAt: new Date().toISOString(), bodies: Object.keys(sheet.bodies).length, pieces: Object.keys(sheet.pieces).length });
+    showBanner('Marked ready for the game. Ask Claude: "Sync the sprites from the Sprite Workshop into the game."');
+    toast('Ready to sync');
+  } catch (e) { toast(`Couldn't mark it ready: ${e?.message || e}`); }
+}
+
+// ---------- Boot ----------
+async function boot() {
+  try { const local = JSON.parse(localStorage.getItem('sprite-workshop-sheet') || 'null'); if (local?.bodies) sheet = local; } catch {}
+  db = await window.claude?.use?.('db');
+  if (!db) {
+    loaded = true;
+    showBanner(Object.keys(sheet.bodies).length ? 'Not connected to the shared workshop. Edits stay in this browser; download sprites.json to keep them.' : 'Not connected to the shared workshop. Load a sprites.json file to start editing in this browser.');
+    afterLoad(); return;
+  }
+  const user = await window.claude.use('user');
+  const w = user ? await user.can('data.write') : null;
+  if (w === false) { canWrite = false; showBanner('You can look around, but only the owner and editors can change these sprites.'); }
+  sheet = { version: 1, bodies: {}, pieces: {} };
+  let got = { bodies: false, pieces: false };
+  const timer = setTimeout(() => { if (!loaded) setStatus("Can't reach the workshop yet", 'bad'); }, 10000);
+  for (const kind of ['bodies', 'pieces']) {
+    db.collection(kind).onSnapshot((snap) => {
+      for (const ch of snap.docChanges()) {
+        const k = `${kind}/${ch.doc.id}`;
+        if (dirty.has(k) || writing.has(k)) continue;   // don't clobber edits in flight
+        if (ch.type === 'removed') delete sheet[kind][ch.doc.id];
+        else sheet[kind][ch.doc.id] = JSON.parse(JSON.stringify(ch.doc.data()));
+      }
+      got[kind] = true;
+      if (got.bodies && got.pieces) {
+        clearTimeout(timer);
+        const first = !loaded; loaded = true;
+        if (first) afterLoad(); else { renderShelf(); if (sel && !cur()) select({ kind: 'bodies', id: Object.keys(sheet.bodies)[0] }); else if (!stroke) { drawBoard(); renderPalette(); renderProps(); } renderPreviewControls(); }
+        refreshStatus();
+      }
+    }, (e) => { clearTimeout(timer); setStatus(`Not connected (${e.code})`, 'bad'); });
+  }
+}
+function afterLoad() {
+  refreshStatus();
+  const firstBody = Object.keys(sheet.bodies)[0];
+  if (firstBody) select({ kind: 'bodies', id: firstBody }); else { renderShelf(); renderProps(); }
+  renderPreviewControls();
+}
+boot();
+})();
+</script>

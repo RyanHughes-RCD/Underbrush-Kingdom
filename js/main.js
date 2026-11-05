@@ -5,6 +5,7 @@ import {
 } from './data.js';
 import * as G from './game.js';
 import { CampScene } from './scene.js';
+import * as S from './sprites.js';
 
 const params = new URLSearchParams(location.search);
 if (params.has('speed')) G.setTimeScale(Number(params.get('speed')));
@@ -35,7 +36,15 @@ function fmtMinutes(min) {
   return h ? (m ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
 }
 const icon = (id, cls = '') => `<img class="${cls}" src="${(ITEMS[id] || WEAPONS[id]).icon}" alt="${esc((ITEMS[id] || WEAPONS[id]).name)}">`;
-const sprite = (cls, c = 'sprite') => `<img class="${c}" src="${CLASSES[cls].sprite}" alt="${esc(CLASSES[cls].name)}">`;
+const sprite = (cls, size = 32, c = '') => S.creatureImg(S.creatureArt(cls), size, c);
+const equippedIds = (c) => { const w = G.getWeapon(state, c.weaponId); return w ? [S.weaponPieceId(w.type, w.tier)] : []; };
+const creatureArt = (c) => S.creatureArt(c.cls, equippedIds(c));
+const creatureSprite = (c, size, cls = '') => S.creatureImg(creatureArt(c), size, cls);
+const pieceIcon = (type, tier, size = 32) => {
+  const art = S.pieceArt(S.weaponPieceId(type, tier));
+  return art ? `<img src="${art.url}" alt="" style="width:${size}px;height:${size * art.h / art.w}px">` : icon(type);
+};
+const weaponIcon = (w) => pieceIcon(w.type, w.tier);
 const countdown = (endsAt) => `<span data-ends="${endsAt}">${fmtDuration(endsAt - Date.now())}</span>`;
 const lootText = (loot) => Object.entries(loot).map(([k, q]) => `${icon(k)}×${q}`).join(' ');
 
@@ -63,7 +72,7 @@ function creatureCard(c) {
   const xpPct = Math.round((c.xp / G.xpToNext(c.level)) * 100);
   return `
     <button class="creature ${busy ? 'busy' : ''}" data-action="creature" data-id="${c.id}">
-      <div class="portrait">${sprite(c.cls)}${w ? `<img class="wpn" src="${WEAPONS[w.type].icon}" alt="">` : ''}</div>
+      <div class="portrait">${creatureSprite(c, 128, 'sprite')}</div>
       <div class="name">${esc(c.name)}</div>
       <div class="cls">${CLASSES[c.cls].name} · Lv ${c.level}</div>
       <div class="bar xp" title="XP"><i style="width:${xpPct}%"></i></div>
@@ -83,7 +92,7 @@ function mountScene() {
   if (!slot) { scene.stop(); return; }
   slot.replaceWith(scene.el);
   scene.resize();
-  scene.setCreatures(state.creatures.filter((c) => !G.isBusy(state, c.id)));
+  scene.setCreatures(state.creatures.filter((c) => !G.isBusy(state, c.id)).map((c) => ({ id: c.id, cls: c.cls, art: creatureArt(c) })));
   if (!document.hidden) scene.start();
 }
 
@@ -102,10 +111,10 @@ function renderCamp() {
     <div class="card">
       ${lures.length ? `<div class="weapon-list">${lures.map((l) => {
         const w = G.getWeapon(state, l.weaponId);
-        return `<div class="weapon-row">${icon(w.type)}<div class="grow small">${esc(G.weaponName(w))}<br><span class="muted">A ${CLASSES[l.cls].name} approaches… ${countdown(l.endsAt)}</span></div></div>`;
+        return `<div class="weapon-row">${weaponIcon(w)}<div class="grow small">${esc(G.weaponName(w))}<br><span class="muted">A ${CLASSES[l.cls].name} approaches… ${countdown(l.endsAt)}</span></div></div>`;
       }).join('')}</div>` : ''}
       ${free.length ? `<div class="weapon-list" style="margin-top:${lures.length ? 10 : 0}px">${free.map((w) => `
-        <div class="weapon-row">${icon(w.type)}<div class="grow small">${esc(G.weaponName(w))} <span class="muted">+${G.weaponPower(w)}</span></div>
+        <div class="weapon-row">${weaponIcon(w)}<div class="grow small">${esc(G.weaponName(w))} <span class="muted">+${G.weaponPower(w)}</span></div>
           <button class="btn sm green" data-action="lure" data-id="${w.id}">Lure</button></div>`).join('')}</div>`
         : (lures.length ? '' : '<p>No spare weapons. Craft some at the Workshops.</p>')}
     </div>
@@ -121,7 +130,7 @@ function openCreature(id) {
   const busy = G.isBusy(state, c.id);
   const options = G.freeWeapons(state).filter((x) => WEAPONS[x.type].cls === c.cls);
   openModal(`
-    <div class="row">${sprite(c.cls, 'portrait-lg')}<div class="grow">
+    <div class="row">${creatureSprite(c, 96, 'portrait-lg')}<div class="grow">
       <h3>${esc(c.name)}</h3>
       <div class="small">${CLASSES[c.cls].name} · Level ${c.level} · Power ${G.creaturePower(state, c)}</div>
       <div class="small muted">XP ${c.xp}/${G.xpToNext(c.level)}</div>
@@ -131,7 +140,7 @@ function openCreature(id) {
       <div class="small"><b>Weapon:</b> ${w ? `${esc(G.weaponName(w))} (+${G.weaponPower(w)})` : 'Bare claws'}</div>
       ${busy ? '<p class="small">Away on an expedition.</p>' : `
         <div class="weapon-list" style="margin-top:8px">
-          ${options.map((o) => `<div class="weapon-row">${icon(o.type)}<div class="grow small">${esc(G.weaponName(o))} +${G.weaponPower(o)}</div>
+          ${options.map((o) => `<div class="weapon-row">${weaponIcon(o)}<div class="grow small">${esc(G.weaponName(o))} +${G.weaponPower(o)}</div>
             <button class="btn sm green" data-action="equip" data-id="${c.id}" data-weapon="${o.id}">Equip</button></div>`).join('')
             || `<p class="small muted">No spare ${WEAPONS[CLASSES[c.cls].weapon].name.toLowerCase()}s in the armory.</p>`}
           ${w ? `<button class="btn sm ghost" data-action="equip" data-id="${c.id}" data-weapon="">Unequip</button>` : ''}
@@ -146,7 +155,7 @@ function demandIcons(exp) {
   const counts = {};
   for (const e of exp.encounters) counts[e.demand] = (counts[e.demand] || 0) + 1;
   return Object.entries(counts).sort((a, b) => b[1] - a[1])
-    .map(([cls, n]) => `<span class="row small" style="gap:0">${sprite(cls, '')}×${n}</span>`).join('');
+    .map(([cls, n]) => `<span class="row small" style="gap:0">${sprite(cls, 32)}×${n}</span>`).join('');
 }
 
 function renderPlanner() {
@@ -162,7 +171,7 @@ function renderPlanner() {
         ${state.creatures.map((c) => {
           const busy = G.isBusy(state, c.id);
           return `<button class="pick ${ui.party.includes(c.id) ? 'on' : ''}" data-action="toggle-party" data-id="${c.id}" ${busy ? 'disabled' : ''}>
-            ${sprite(c.cls, '')}${esc(c.name)}<br><span class="muted">${busy ? 'Away' : `Pow ${G.creaturePower(state, c)}`}</span></button>`;
+            ${creatureSprite(c, 64)}${esc(c.name)}<br><span class="muted">${busy ? 'Away' : `Pow ${G.creaturePower(state, c)}`}</span></button>`;
         }).join('')}
       </div>
       <div class="row">
@@ -191,7 +200,7 @@ function activeExpeditionCard(e) {
   const pct = Math.min(100, ((now - e.startedAt) / (e.encounters.length * e.encounterMs)) * 100);
   const items = e.encounters.map((enc, i) => {
     if (i < done) {
-      return `<li>${sprite(enc.demand, '')}<span class="grow">${esc(enc.name)}</span>
+      return `<li>${sprite(enc.demand, 32)}<span class="grow">${esc(enc.name)}</span>
         <span class="${enc.success ? 'win' : 'lose'}">${enc.success ? 'Won' : 'Fled'}</span>
         <span class="loot-icons">${lootText(enc.loot)}</span></li>`;
     }
@@ -203,7 +212,7 @@ function activeExpeditionCard(e) {
       <div class="row">
         <div class="grow"><h3>${esc(exp.name)}</h3>
           <div class="small muted">${done}/${e.encounters.length} encounters · ${complete ? 'Back at camp!' : countdown(G.expeditionEndsAt(e)) + ' left'}</div></div>
-        <div class="party-strip">${e.partyIds.map((id) => { const c = G.getCreature(state, id); return c ? sprite(c.cls, '') : ''; }).join('')}</div>
+        <div class="party-strip">${e.partyIds.map((id) => { const c = G.getCreature(state, id); return c ? creatureSprite(c, 64) : ''; }).join('')}</div>
       </div>
       <div class="bar" style="margin:6px 0"><i style="width:${pct}%"></i></div>
       <ul class="enc-list">${items}</ul>
@@ -264,7 +273,7 @@ function renderWorkshops() {
             ${WEAPON_TIERS.map((t) => `
               <button class="btn ${ws.id === 'enchanter' ? 'purple' : ws.id === 'forge' ? '' : 'green'}" data-action="craft" data-type="${wpn.id}" data-tier="${t.tier}"
                 ${G.canCraft(state, wpn.id, t.tier) ? 'disabled' : ''}>
-                <img src="${wpn.icon}" alt="">${t.prefix}<span>+${t.power} · ${t.cost}${icon(wpn.material, '')}</span></button>`).join('')}
+                ${pieceIcon(wpn.id, t.tier)}${t.prefix}<span>+${t.power} · ${t.cost}${icon(wpn.material, '')}</span></button>`).join('')}
           </div>
         </div>
       </div>`;
@@ -373,6 +382,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // Boot
+await S.loadSprites();
 G.tick(state);
 save();
 render();
