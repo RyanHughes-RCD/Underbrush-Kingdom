@@ -35,7 +35,7 @@ bodies = {
     'mage':   ('Wizard Mouse',  'wizard-mouse',  {'hand': (17, 24), 'offhand': (20, 20), 'head': (14, 7), 'chest': (14, 18), 'back': (10, 18)}),
 }
 weapons = {'bow': ((11, 8), 'Bow'), 'sword': ((4, 12), 'Sword'), 'staff': ((7, 10), 'Staff')}
-tiers = ['Rough', 'Sturdy', 'Fine']
+groups = ['1-3', '4-6', '7-10']
 
 data = {'version': 1, 'bodies': {}, 'pieces': {}}
 for cls, (name, file, anchors) in bodies.items():
@@ -44,9 +44,9 @@ for cls, (name, file, anchors) in bodies.items():
     data['bodies'][cls] = b
 for wid, (pivot, wname) in weapons.items():
     art = encode(os.path.join(root, 'assets/items', wid + '.png'))
-    for t, prefix in enumerate(tiers, 1):
+    for t, rng in enumerate(groups, 1):
         data['pieces'][f'{wid}-{t}'] = {
-            'name': f'{prefix} {wname}', **art, 'slot': 'weapon', 'anchor': 'hand',
+            'name': f'{wname} (tiers {rng})', **art, 'slot': 'weapon', 'anchor': 'hand',
             'pivot': {'x': pivot[0], 'y': pivot[1]}, 'layer': 'front', 'wornBy': [],
         }
 with open(os.path.join(root, 'assets/sprites/sprites.json'), 'w') as f:

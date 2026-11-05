@@ -19,11 +19,13 @@ A phone-first web game about a band of tiny heroes living in the underbrush. Col
    | Glimmer Creek | Wizard Mice | Pebbles |
    | Windy Meadow | A mixed party | A bit of everything |
 3. **Duration = encounters.** Choose 1–12 encounters, 10 minutes each (6 encounters = 1 hour). Results are revealed one encounter at a time. Later encounters are harder but give more. You can recall a party early and keep what they've already found.
-4. **Workshops.** Take scrap to be processed:
-   - Woodworker's Cabin: twigs → **wood**
-   - The Forge: bottle caps → **metal**
-   - Enchanter's Hut: pebbles → **gemstones**
-5. **Craft weapons.** Bows (wood), swords (metal) and staffs (gems) come in three tiers. Equip one to raise a fighter's power…
+4. **Workshops.** Put scrap into a workshop to smelt it into one material. Each family has 10 tiers:
+   - Woodworker's Cabin: twigs → **woods** (Pine, Oak, Ashwood … Godwood)
+   - The Forge: bottle caps → **metals** (Iron, Copper, Bronze … Godsbane)
+   - Enchanter's Hut: pebbles → **crystals** (Quartz, Amethyst, Garnet … Prismheart)
+
+   Each scrap has a **value**, and a batch's total value sets the odds. Tier 1 is always the likeliest, and more value makes rarer tiers likelier. Each scrap also has a highest tier it can ever reach; bottle caps, twigs and pebbles top out at tier 4. With 3 bottle caps the odds are about 50% Iron, 35% Copper, 12% Bronze and 2% Steel. The workshop shows the odds before you commit, and the result is revealed when the batch finishes. Materials you haven't found yet show as "?".
+5. **Craft weapons.** A weapon takes 3 of one material: a Pine Bow, a Steel Sword, an Amethyst Staff. Its power comes from the material's tier. Equip one to raise a fighter's power…
 6. **…or lure a recruit.** Leave a weapon at the **Lure Post** and, after a while, a new fighter of that class wanders in to claim it.
 
 Fighters gain XP for every encounter their party wins, and level up over time.
@@ -73,7 +75,7 @@ Character art is edited in the **[Sprite Workshop](https://claude.ai/artifact/SG
 
 - **Bodies** (one per class) have named **anchor points**: `hand`, `offhand`, `head`, `chest`, `back`, or any name you add.
 - **Gear pieces** (weapons, armour, hats) say which anchor they attach to and which pixel is their **pivot**. The game draws each piece so its pivot sits on the anchor, in front of or behind the body.
-- The pieces `bow-1..3`, `sword-1..3` and `staff-1..3` are the in-game weapon tiers. Tick **Always worn by** to make a piece part of a class's default look, such as the beetle's armour. An equipped weapon replaces an always-worn piece in the same slot.
+- Weapon art is chosen by material. A piece named `sword-steel`, `bow-oak` or `staff-garnet` gives that material its own look. Otherwise `sword-1`, `sword-2` and `sword-3` cover material tiers 1–3, 4–6 and 7–10 (the same goes for bows and staffs). Tick **Always worn by** to make a piece part of a class's default look, such as the beetle's armour. An equipped weapon replaces an always-worn piece in the same slot.
 - When you're happy with the art, press **Send to game**, then ask Claude to sync the sprites. You can also download `sprites.json` from the workshop and replace `assets/sprites/sprites.json` yourself.
 
 ## Art pipeline

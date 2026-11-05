@@ -1,6 +1,7 @@
 // UI layer: renders state into the DOM and wires up taps.
 import {
-  CLASSES, CLASS_IDS, ITEMS, WEAPONS, WEAPON_TIERS, WORKSHOPS, EXPEDITIONS, EXPEDITION_IDS,
+  CLASSES, CLASS_IDS, ITEMS, WEAPONS, WORKSHOPS, EXPEDITIONS, EXPEDITION_IDS,
+  SCRAPS, MATERIALS, FAMILIES, MAX_BATCH, WEAPON_COST, TIER_NAMES,
   ENCOUNTER_MINUTES, MIN_ENCOUNTERS, MAX_ENCOUNTERS, MAX_PARTY, LURE_MINUTES,
 } from './data.js';
 import * as G from './game.js';
@@ -16,6 +17,7 @@ const ui = {
   expType: null,         // expedition being planned
   party: [],             // creature ids chosen for it
   count: 3,              // encounters chosen
+  smelt: { woodworker: 3, forge: 3, enchanter: 3 }, // pieces per batch
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -37,14 +39,14 @@ function fmtMinutes(min) {
 }
 const icon = (id, cls = '') => `<img class="${cls}" src="${(ITEMS[id] || WEAPONS[id]).icon}" alt="${esc((ITEMS[id] || WEAPONS[id]).name)}">`;
 const sprite = (cls, size = 32, c = '') => S.creatureImg(S.creatureArt(cls), size, c);
-const equippedIds = (c) => { const w = G.getWeapon(state, c.weaponId); return w ? [S.weaponPieceId(w.type, w.tier)] : []; };
+const equippedIds = (c) => { const w = G.getWeapon(state, c.weaponId); return w ? [S.weaponPieceId(w.type, w.material)] : []; };
 const creatureArt = (c) => S.creatureArt(c.cls, equippedIds(c));
 const creatureSprite = (c, size, cls = '') => S.creatureImg(creatureArt(c), size, cls);
-const pieceIcon = (type, tier, size = 32) => {
-  const art = S.pieceArt(S.weaponPieceId(type, tier));
+const pieceIcon = (type, material, size = 32) => {
+  const art = S.pieceArt(S.weaponPieceId(type, material));
   return art ? `<img src="${art.url}" alt="" style="width:${size}px;height:${size * art.h / art.w}px">` : icon(type);
 };
-const weaponIcon = (w) => pieceIcon(w.type, w.tier);
+const weaponIcon = (w) => pieceIcon(w.type, w.material);
 const countdown = (endsAt) => `<span data-ends="${endsAt}">${fmtDuration(endsAt - Date.now())}</span>`;
 const lootText = (loot) => Object.entries(loot).map(([k, q]) => `${icon(k)}×${q}`).join(' ');
 
@@ -58,10 +60,15 @@ function toast(msg) {
 // ---------- Satchel ----------
 
 function renderSatchel() {
-  $('#satchel').innerHTML = Object.keys(ITEMS).map((k) => {
+  const scraps = Object.keys(SCRAPS).map((k) => {
     const q = state.inventory[k] || 0;
     return `<span class="it ${q ? '' : 'zero'}" title="${esc(ITEMS[k].name)}">${icon(k)}${q}</span>`;
-  }).join('');
+  });
+  const fams = Object.values(FAMILIES).map((f) => {
+    const q = f.list.reduce((n, m) => n + (state.inventory[m.id] || 0), 0);
+    return `<span class="it ${q ? '' : 'zero'}" title="${esc(f.name)}"><img src="assets/items/${f.base}.png" alt="${esc(f.name)}">${q}</span>`;
+  });
+  $('#satchel').innerHTML = [...scraps, '<span class="sep"></span>', ...fams].join('');
 }
 
 // ---------- Camp ----------
@@ -246,38 +253,84 @@ function renderExpeditions() {
 
 // ---------- Workshops ----------
 
+const pct = (p) => (p >= 0.995 ? '>99%' : p < 0.005 ? '<1%' : `${Math.round(p * 100)}%`);
+
 function renderWorkshops() {
   return `
     <h2>Workshops</h2>
-    <p class="hint">Process scrap into materials, then craft weapons for your fighters.</p>
+    <p class="hint">Put scrap into a workshop to smelt it. The more you put in, the better your odds of a rare material. Each batch makes one material.</p>
     ${Object.values(WORKSHOPS).map((ws) => {
-      const jobs = G.workshopJobs(state, ws.id);
+      const sc = SCRAPS[ws.input];
       const have = state.inventory[ws.input] || 0;
-      const maxBatches = Math.floor(have / ws.inputQty);
+      const n = Math.max(1, Math.min(ui.smelt[ws.id], MAX_BATCH));
+      const odds = G.smeltOdds(ws.input, n);
+      const jobs = G.workshopJobs(state, ws.id);
+      const fam = FAMILIES[ws.family];
       const wpn = WEAPONS[ws.weapon];
+      const owned = fam.list.filter((m) => state.inventory[m.id] > 0);
+      const seen = new Set(state.discovered || []);
       return `
       <div class="card">
-        <div class="ws-head">
-          <div class="grow"><h3>${esc(ws.name)}</h3><p>${esc(ws.blurb)}</p></div>
-        </div>
-        <div class="ws-head"><div class="recipe">${icon(ws.input)}×${ws.inputQty} → ${icon(ws.output)}×${ws.outputQty}
-          <span class="muted">(${fmtMinutes(ws.minutes)})</span></div></div>
-        <div class="row" style="margin-top:6px">
-          <button class="btn sm" data-action="process" data-id="${ws.id}" data-n="1" ${maxBatches < 1 ? 'disabled' : ''}>Process 1</button>
-          <button class="btn sm ghost" data-action="process" data-id="${ws.id}" data-n="${maxBatches}" ${maxBatches < 2 ? 'disabled' : ''}>All (${maxBatches})</button>
-        </div>
-        ${jobs.length ? `<p class="small">Working: ${jobs.length} batch${jobs.length > 1 ? 'es' : ''} · next in ${countdown(jobs[0].endsAt)} · all done in ${countdown(jobs[jobs.length - 1].endsAt)}</p>` : ''}
+        <h3>${esc(ws.name)}</h3>
+        <p>${esc(ws.blurb)}</p>
+
         <div class="ws-section">
-          <div class="small" style="margin-bottom:6px"><b>Craft a ${wpn.name}</b> <span class="muted">for ${CLASSES[wpn.cls].plural}</span></div>
-          <div class="tiers">
-            ${WEAPON_TIERS.map((t) => `
-              <button class="btn ${ws.id === 'enchanter' ? 'purple' : ws.id === 'forge' ? '' : 'green'}" data-action="craft" data-type="${wpn.id}" data-tier="${t.tier}"
-                ${G.canCraft(state, wpn.id, t.tier) ? 'disabled' : ''}>
-                ${pieceIcon(wpn.id, t.tier)}${t.prefix}<span>+${t.power} · ${t.cost}${icon(wpn.material, '')}</span></button>`).join('')}
+          <div class="row">
+            <div class="grow small"><b>Smelt ${esc(sc.name)}s</b><br><span class="muted">You have ${have} · value ${sc.value} each · batch value ${sc.value * n}</span></div>
+            <div class="stepper">
+              <button class="btn ghost sm" data-action="smelt-n" data-id="${ws.id}" data-d="-1" ${n <= 1 ? 'disabled' : ''}>−</button>
+              <span class="val">${n}</span>
+              <button class="btn ghost sm" data-action="smelt-n" data-id="${ws.id}" data-d="1" ${n >= MAX_BATCH ? 'disabled' : ''}>+</button>
+            </div>
           </div>
+          <ul class="odds-list">
+            ${odds.map((o) => `<li>${seen.has(o.material) ? icon(o.material) : '<span class="unknown">?</span>'}
+              <span class="grow">${seen.has(o.material) ? esc(MATERIALS[o.material].name) : `Tier ${o.tier} ${fam.name.toLowerCase().slice(0, -1)}`}</span>
+              <span class="obar"><i style="width:${Math.max(2, o.p * 100)}%"></i></span><span class="pct">${pct(o.p)}</span></li>`).join('')}
+          </ul>
+          <button class="btn block" data-action="smelt" data-id="${ws.id}" data-n="${n}" ${have < n ? 'disabled' : ''}>
+            Smelt ${n} ${esc(sc.name)}${n > 1 ? 's' : ''} <span class="muted-inv">(${fmtMinutes(ws.minutes)})</span></button>
+          ${jobs.length ? `<ul class="jobs">${jobs.map((j, i) => `<li><span class="unknown">?</span><span class="grow">${j.count} ${esc(ITEMS[j.input].name)}${j.count > 1 ? 's' : ''}</span>
+            <span class="muted">${i === 0 || j.startsAt <= Date.now() ? `ready in ${countdown(j.endsAt)}` : `queued · ${countdown(j.endsAt)}`}</span></li>`).join('')}</ul>` : ''}
+        </div>
+
+        <div class="ws-section">
+          <div class="small" style="margin-bottom:6px"><b>${esc(fam.name)}</b> <span class="muted">${seen.size ? `${fam.list.filter((m) => seen.has(m.id)).length}/10 discovered` : ''}</span></div>
+          <div class="mat-grid">
+            ${fam.list.map((m, i) => {
+              const q = state.inventory[m.id] || 0;
+              return seen.has(m.id)
+                ? `<button class="mat ${q ? '' : 'none'}" data-action="material" data-id="${m.id}" title="${esc(m.name)}">${icon(m.id)}<span>${q}</span></button>`
+                : `<div class="mat locked" title="Undiscovered tier ${i + 1}"><span class="unknown">?</span><span>${i + 1}</span></div>`;
+            }).join('')}
+          </div>
+        </div>
+
+        <div class="ws-section">
+          <div class="small" style="margin-bottom:6px"><b>Craft a ${wpn.name}</b> <span class="muted">for ${CLASSES[wpn.cls].plural} · ${WEAPON_COST} of one material</span></div>
+          ${owned.length ? `<div class="craft-list">${owned.map((m) => {
+            const mat = MATERIALS[m.id];
+            return `<button class="btn ghost craft" data-action="craft" data-type="${wpn.id}" data-material="${m.id}" ${G.canCraft(state, wpn.id, m.id) ? 'disabled' : ''}>
+              ${pieceIcon(wpn.id, m.id)}<span class="grow">${esc(mat.name)} ${wpn.name}<br><span class="muted">+${mat.power} power</span></span>
+              <span class="cost">${state.inventory[m.id]}/${WEAPON_COST} ${icon(m.id)}</span></button>`;
+          }).join('')}</div>` : `<p class="small muted">Smelt some ${esc(sc.name.toLowerCase())}s first.</p>`}
         </div>
       </div>`;
     }).join('')}`;
+}
+
+function openMaterial(id) {
+  const m = MATERIALS[id];
+  const fam = FAMILIES[m.family];
+  const wpn = Object.values(WEAPONS).find((w) => w.family === m.family);
+  openModal(`
+    <div class="row">${icon(m.id, 'mat-lg')}<div class="grow">
+      <h3>${esc(m.name)}</h3>
+      <div class="small muted">${esc(fam.name.slice(0, -1))} · tier ${m.tier} · ${TIER_NAMES[m.tier - 1]}</div>
+    </div></div>
+    <p class="small">${esc(m.blurb)}</p>
+    <p class="small">You have <b>${state.inventory[m.id] || 0}</b>. A ${esc(m.name)} ${wpn.name} gives <b>+${m.power}</b> power.</p>
+    <button class="btn block ghost" data-action="close">Close</button>`);
 }
 
 // ---------- Render loop ----------
@@ -302,7 +355,12 @@ function timeSignature() {
 let lastSig = '';
 
 function loop() {
-  if (G.tick(state)) { save(); render(); }
+  const before = state.recent?.[0]?.t;
+  if (G.tick(state)) {
+    save(); render();
+    const r = state.recent?.[0];
+    if (r && r.t !== before) toast(`New material: ${MATERIALS[r.material].name}!`);
+  }
   const sig = timeSignature();
   if (sig !== lastSig) { lastSig = sig; render(); return; }
   const now = Date.now();
@@ -361,8 +419,10 @@ document.addEventListener('click', (ev) => {
     case 'recall':
       if (confirm('Recall this party now? They keep loot from finished encounters only.')) act(() => G.claimExpedition(state, id));
       break;
-    case 'process': act(() => G.startProcessing(state, id, Number(el.dataset.n))); break;
-    case 'craft': act(() => { const w = G.craftWeapon(state, el.dataset.type, Number(el.dataset.tier)); toast(`Crafted a ${G.weaponName(w)}!`); }); break;
+    case 'smelt-n': ui.smelt[id] = Math.max(1, Math.min(MAX_BATCH, ui.smelt[id] + Number(el.dataset.d))); render(); break;
+    case 'smelt': act(() => G.startSmelting(state, id, Number(el.dataset.n))); break;
+    case 'material': openMaterial(id); break;
+    case 'craft': act(() => { const w = G.craftWeapon(state, el.dataset.type, el.dataset.material); toast(`Crafted ${G.withArticle(G.weaponName(w))}!`); }); break;
     case 'reset':
       if (confirm('Erase your kingdom and start over?')) { G.clearStorage(); state = G.newGame(); save(); ui.expType = null; render(); }
       break;

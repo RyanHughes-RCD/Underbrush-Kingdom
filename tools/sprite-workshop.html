@@ -196,7 +196,14 @@ const CHARS = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const PAD = 8;
 const CLASSES = { archer: 'Archer Lizard', knight: 'Beetle Knight', mage: 'Wizard Mouse' };
 const WEAPON_ROLES = { bow: 'Bow', sword: 'Sword', staff: 'Staff' };
-const TIERS = ['Rough', 'Sturdy', 'Fine'];
+// Material tiers per weapon family, matching the game's js/data.js.
+const MATS = {
+  bow: ['pine', 'oak', 'ashwood', 'ironwood', 'heartwood', 'thornwood', 'moonwood', 'elderwood', 'worldroot', 'godwood'],
+  sword: ['iron', 'copper', 'bronze', 'steel', 'silversteel', 'mithril', 'stariron', 'bloodsteel', 'voidforged', 'godsbane'],
+  staff: ['quartz', 'amethyst', 'garnet', 'moonstone', 'sunstone', 'stormglass', 'soulstone', 'dreamglass', 'astralite', 'prismheart'],
+};
+const cap = (s) => s[0].toUpperCase() + s.slice(1);
+const GROUPS = [[1, 3], [4, 6], [7, 10]];
 const ANCHOR_NAMES = ['hand', 'offhand', 'head', 'chest', 'back'];
 const SLOTS = ['weapon', 'offhand', 'head', 'body', 'back', 'other'];
 const anchorColor = (n) => getComputedStyle(document.documentElement).getPropertyValue(`--a-${ANCHOR_NAMES.includes(n) ? n : 'other'}`).trim();
@@ -255,11 +262,17 @@ function layout(cls, equippedIds) {
 }
 
 function roleOf(id, p) {
-  const m = /^(bow|sword|staff)-([123])$/.exec(id);
+  const m = /^(bow|sword|staff)-([a-z0-9]+)$/.exec(id);
   const bits = [];
-  if (m) bits.push(`In game: ${TIERS[m[2] - 1]} ${WEAPON_ROLES[m[1]]} (tier ${m[2]})`);
+  if (m && /^[123]$/.test(m[2])) {
+    const [lo, hi] = GROUPS[m[2] - 1];
+    const own = MATS[m[1]].slice(lo - 1, hi).filter((mat) => !sheet.pieces[`${m[1]}-${mat}`]);
+    bits.push(own.length ? `In game: the ${WEAPON_ROLES[m[1]].toLowerCase()} for ${own.map(cap).join(', ')} (tiers ${lo}-${hi})` : `Not shown in game: every material in tiers ${lo}-${hi} has its own piece`);
+  } else if (m && MATS[m[1]].includes(m[2])) {
+    bits.push(`In game: ${cap(m[2])} ${WEAPON_ROLES[m[1]]} (tier ${MATS[m[1]].indexOf(m[2]) + 1})`);
+  }
   if (p.wornBy?.length) bits.push(`Always worn by ${p.wornBy.map((c) => CLASSES[c]).join(', ')}`);
-  return bits.length ? bits.join(' · ') : 'Not used in game yet. Name it bow-1…staff-3 to make it a weapon tier, or tick "Always worn by".';
+  return bits.length ? bits.join(' · ') : 'Not used in game yet. Name it after a weapon and material (sword-steel, bow-oak, staff-garnet) or a tier group (sword-1, sword-2, sword-3), or tick "Always worn by".';
 }
 
 // ---------- History ----------
@@ -342,7 +355,7 @@ function newForm() {
     <label class="field">ID <input id="nf-id" required pattern="[a-z0-9][a-z0-9-]{0,39}" placeholder="leaf-hood"></label>
     <div class="row"><label class="field">Size<select id="nf-size"><option>16</option><option selected>24</option><option>32</option><option>48</option></select></label>
       <label class="field">Slot<select id="nf-slot">${SLOTS.map((s) => `<option>${s}</option>`).join('')}</select></label></div>
-    <p class="hint">Use bow-1 to bow-3, sword-1 to sword-3 or staff-1 to staff-3 as the ID to replace a game weapon tier.</p>
+    <p class="hint">Weapon art: sword-steel, bow-oak, staff-garnet and so on give one material its own look. sword-1, sword-2 and sword-3 cover material tiers 1-3, 4-6 and 7-10 (same for bow and staff).</p>
     <div class="row"><button class="btn sm primary">Create</button><button type="button" class="btn sm" id="nf-cancel">Cancel</button></div>
   </form>`;
 }

@@ -2,13 +2,25 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { layout, decode, PAD, weaponPieceId } from '../js/sprites.js';
-import { CLASS_IDS, WEAPONS, WEAPON_TIERS } from '../js/data.js';
+import { CLASS_IDS, WEAPONS, MATERIALS } from '../js/data.js';
 
 const sheet = JSON.parse(readFileSync(new URL('../assets/sprites/sprites.json', import.meta.url)));
 
-test('every class has a body and every weapon tier has a piece', () => {
+test('every class has a body and every weapon material has art', () => {
   for (const cls of CLASS_IDS) assert.ok(sheet.bodies[cls], cls);
-  for (const type of Object.keys(WEAPONS)) for (const t of WEAPON_TIERS) assert.ok(sheet.pieces[weaponPieceId(type, t.tier)], `${type}-${t.tier}`);
+  for (const [type, wt] of Object.entries(WEAPONS)) {
+    for (const mat of Object.values(MATERIALS).filter((m) => m.family === wt.family)) {
+      assert.ok(sheet.pieces[weaponPieceId(type, mat.id, sheet)], `${type} ${mat.id}`);
+    }
+  }
+});
+
+test('weapon art: exact material piece wins, else tier group', () => {
+  assert.equal(weaponPieceId('sword', 'copper', sheet), 'sword-1');
+  assert.equal(weaponPieceId('sword', 'mithril', sheet), 'sword-2');
+  assert.equal(weaponPieceId('sword', 'godsbane', sheet), 'sword-3');
+  const data = { pieces: { ...sheet.pieces, 'sword-steel': sheet.pieces['sword-1'] } };
+  assert.equal(weaponPieceId('sword', 'steel', data), 'sword-steel');
 });
 
 test('sprites decode to the right size', () => {

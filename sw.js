@@ -1,5 +1,5 @@
 // Offline cache. Bump CACHE when shipping changes so players get the update.
-const CACHE = 'underbrush-v4';
+const CACHE = 'underbrush-v5';
 const ASSETS = [
   './', 'index.html', 'css/style.css', 'manifest.webmanifest',
   'js/main.js', 'js/game.js', 'js/data.js', 'js/scene.js', 'js/sprites.js', 'assets/sprites/sprites.json',

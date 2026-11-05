@@ -2,10 +2,16 @@
 
 Static web game with no build step (HTML, CSS and ES modules). `npm test` runs the Node tests. GitHub Pages deploys from `main` through `.github/workflows/pages.yml`.
 
+## Materials and smelting
+
+- `js/data.js` holds `FAMILIES` (metal, wood, crystal; 10 tiers each), `SCRAPS` (each with `value` and `maxTier`), and the odds constants `SMELT_FALLOFF` and `MAX_BATCH`. `smeltOdds()` in `js/game.js` computes the odds: the weight of tier t is exp(-(t-1)² / 2σ²), where σ = √(total value) / SMELT_FALLOFF.
+- Material icons are generated into `assets/items/materials/` by `tools/make_item_icons.py`, using each material's palette in `data.js`.
+- Saves are versioned; `migrate()` in `js/game.js` upgrades old ones. Bump `SAVE_VERSION` and add a migration step whenever the save shape changes.
+
 ## Character art
 
 - `assets/sprites/sprites.json` is the source of truth for character art. It holds `bodies` (one per class: archer, knight, mage) and `pieces` (weapons, armour). Pieces attach to a body by naming an anchor (`hand`, `offhand`, `head`, `chest`, `back`, …); a piece's `pivot` lands on that anchor. The format is described in `tools/png_to_sprites_json.py`, and the rendering is `layout()` in `js/sprites.js`.
-- Weapon tiers map to piece ids: `bow-1..3`, `sword-1..3`, `staff-1..3`. A piece with `wornBy: [class]` is always drawn on that class. An equipped weapon replaces worn pieces in the same `slot`.
+- Weapon art maps to piece ids by material: `sword-<material>` if it exists, else `sword-1` (tiers 1-3), `sword-2` (4-6), `sword-3` (7-10). The same goes for `bow-` and `staff-`. See `weaponPieceId()` in `js/sprites.js`. A piece with `wornBy: [class]` is always drawn on that class. An equipped weapon replaces worn pieces in the same `slot`.
 - `assets/sprites/*.png` are generated previews (used for tab icons and the README). Don't edit them by hand.
 
 ## Syncing from the Sprite Workshop

@@ -2,12 +2,13 @@
 // matters) and mutates/returns it. No DOM access here so it can be unit tested.
 
 import {
-  CLASSES, CLASS_IDS, ITEMS, WEAPONS, WEAPON_TIERS, WORKSHOPS, EXPEDITIONS,
+  CLASSES, CLASS_IDS, ITEMS, WEAPONS, WORKSHOPS, EXPEDITIONS, SCRAPS, MATERIALS,
+  materialAt, SMELT_FALLOFF, MAX_BATCH, WEAPON_COST,
   ENCOUNTER_MINUTES, MIN_ENCOUNTERS, MAX_ENCOUNTERS, MAX_PARTY,
   LURE_MINUTES, MAX_ROSTER,
 } from './data.js';
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 const MINUTE = 60 * 1000;
 
 // Debug/testing: multiplies the speed of all timers. Set via ?speed=60.
@@ -58,6 +59,7 @@ export function newGame(seed = Date.now()) {
     jobs: [],
     lures: [],
     log: [],
+    discovered: [],
   };
   for (const cls of CLASS_IDS) addCreature(state, cls);
   addLog(state, 'Three brave fighters gather beneath the ferns. The Underbrush Kingdom begins.');
@@ -86,8 +88,10 @@ export function addCreature(state, cls, weaponId = null) {
 export function getCreature(state, id) { return state.creatures.find((c) => c.id === id); }
 export function getWeapon(state, id) { return state.weapons.find((w) => w.id === id); }
 
-export function weaponPower(w) { return w ? WEAPON_TIERS[w.tier - 1].power : 0; }
-export function weaponName(w) { return `${WEAPON_TIERS[w.tier - 1].prefix} ${WEAPONS[w.type].name}`; }
+export function weaponPower(w) { return w ? MATERIALS[w.material].power : 0; }
+export function weaponName(w) { return `${MATERIALS[w.material].name} ${WEAPONS[w.type].name}`; }
+export function weaponTier(w) { return MATERIALS[w.material].tier; }
+export const withArticle = (name) => `${/^[aeiou]/i.test(name) ? 'an' : 'a'} ${name}`;
 
 export function creaturePower(state, c) {
   return 3 + (c.level - 1) + weaponPower(getWeapon(state, c.weaponId));
@@ -226,55 +230,73 @@ export function claimExpedition(state, expeditionId, now = Date.now()) {
   return { loot, wins, done };
 }
 
-// ---------- Workshops (processing scrap into materials) ----------
+// ---------- Workshops (smelting scrap into materials) ----------
+
+/**
+ * Odds for each material a batch could become. `count` pieces of `scrapId`
+ * are put in; their total value spreads the odds toward higher tiers, up to
+ * the scrap's maxTier. Returns [{material, tier, p}] with p summing to 1.
+ */
+export function smeltOdds(scrapId, count) {
+  const sc = SCRAPS[scrapId];
+  const value = sc.value * count;
+  const spread = Math.sqrt(value) / SMELT_FALLOFF;
+  const weights = [];
+  for (let t = 1; t <= sc.maxTier; t++) weights.push(Math.exp(-((t - 1) ** 2) / (2 * spread * spread)));
+  const total = weights.reduce((a, b) => a + b, 0);
+  return weights.map((w, i) => ({ material: materialAt(sc.family, i + 1), tier: i + 1, p: w / total }));
+}
 
 export function workshopJobs(state, workshopId) {
   return state.jobs.filter((j) => j.workshop === workshopId).sort((a, b) => a.endsAt - b.endsAt);
 }
 
-export function canProcess(state, workshopId, batches = 1) {
+export function canSmelt(state, workshopId, count) {
   const w = WORKSHOPS[workshopId];
   if (!w) return 'Unknown workshop.';
-  if (!(batches >= 1)) return 'Nothing to process.';
-  if ((state.inventory[w.input] || 0) < w.inputQty * batches) {
-    return `Needs ${w.inputQty * batches} ${ITEMS[w.input].name}s.`;
-  }
+  if (!Number.isInteger(count) || count < 1) return 'Put in at least one piece.';
+  if (count > MAX_BATCH) return `A batch holds at most ${MAX_BATCH} pieces.`;
+  if ((state.inventory[w.input] || 0) < count) return `You only have ${state.inventory[w.input] || 0} ${ITEMS[w.input].name}s.`;
   return null;
 }
 
-/** Queues processing batches. Batches in one workshop run one after another. */
-export function startProcessing(state, workshopId, batches = 1, now = Date.now()) {
-  const err = canProcess(state, workshopId, batches);
+/**
+ * Puts `count` scrap into a workshop. The result is rolled now (seeded) and
+ * revealed when the batch finishes. Batches in one workshop run in turn.
+ */
+export function startSmelting(state, workshopId, count, now = Date.now()) {
+  const err = canSmelt(state, workshopId, count);
   if (err) throw new Error(err);
   const w = WORKSHOPS[workshopId];
-  state.inventory[w.input] -= w.inputQty * batches;
+  state.inventory[w.input] -= count;
+  const rng = mulberry32(nextSeed(state));
+  const odds = smeltOdds(w.input, count);
+  let r = rng(), result = odds[0].material;
+  for (const o of odds) { r -= o.p; if (r < 0) { result = o.material; break; } }
   const queue = workshopJobs(state, workshopId);
-  let start = Math.max(now, queue.length ? queue[queue.length - 1].endsAt : now);
-  for (let b = 0; b < batches; b++) {
-    const endsAt = start + minutesToMs(w.minutes);
-    state.jobs.push({ id: newId(state, 'j'), workshop: workshopId, startsAt: start, endsAt });
-    start = endsAt;
-  }
+  const start = Math.max(now, queue.length ? queue[queue.length - 1].endsAt : now);
+  const job = { id: newId(state, 'j'), workshop: workshopId, input: w.input, count, result, startsAt: start, endsAt: start + minutesToMs(w.minutes) };
+  state.jobs.push(job);
+  return job;
 }
 
 // ---------- Crafting weapons ----------
 
-export function canCraft(state, weaponType, tier) {
+export function canCraft(state, weaponType, materialId) {
   const wt = WEAPONS[weaponType];
-  const t = WEAPON_TIERS[tier - 1];
-  if (!wt || !t) return 'Unknown weapon.';
-  if ((state.inventory[wt.material] || 0) < t.cost) return `Needs ${t.cost} ${ITEMS[wt.material].name}s.`;
+  const mat = MATERIALS[materialId];
+  if (!wt || !mat || mat.family !== wt.family) return 'That material cannot make this weapon.';
+  if ((state.inventory[materialId] || 0) < WEAPON_COST) return `Needs ${WEAPON_COST} ${mat.name}.`;
   return null;
 }
 
-export function craftWeapon(state, weaponType, tier, now = Date.now()) {
-  const err = canCraft(state, weaponType, tier);
+export function craftWeapon(state, weaponType, materialId, now = Date.now()) {
+  const err = canCraft(state, weaponType, materialId);
   if (err) throw new Error(err);
-  const wt = WEAPONS[weaponType];
-  state.inventory[wt.material] -= WEAPON_TIERS[tier - 1].cost;
-  const w = { id: newId(state, 'w'), type: weaponType, tier };
+  state.inventory[materialId] -= WEAPON_COST;
+  const w = { id: newId(state, 'w'), type: weaponType, material: materialId };
   state.weapons.push(w);
-  addLog(state, `Crafted a ${weaponName(w)}.`, now);
+  addLog(state, `Crafted ${withArticle(weaponName(w))}.`, now);
   return w;
 }
 
@@ -311,7 +333,7 @@ export function startLure(state, weaponId, now = Date.now()) {
   const w = getWeapon(state, weaponId);
   const cls = WEAPONS[w.type].cls;
   state.lures.push({ id: newId(state, 'l'), weaponId, cls, startedAt: now, endsAt: now + minutesToMs(LURE_MINUTES) });
-  addLog(state, `Left a ${weaponName(w)} at the Lure Post. Something is watching...`, now);
+  addLog(state, `Left ${withArticle(weaponName(w))} at the Lure Post. Something is watching...`, now);
 }
 
 // ---------- Ticking timers ----------
@@ -322,14 +344,13 @@ export function tick(state, now = Date.now()) {
   const finished = state.jobs.filter((j) => j.endsAt <= now);
   if (finished.length) {
     state.jobs = state.jobs.filter((j) => j.endsAt > now);
-    const made = {};
-    for (const j of finished) {
-      const w = WORKSHOPS[j.workshop];
-      state.inventory[w.output] = (state.inventory[w.output] || 0) + w.outputQty;
-      made[w.output] = (made[w.output] || 0) + w.outputQty;
+    for (const j of finished.sort((a, b) => a.endsAt - b.endsAt)) {
+      state.inventory[j.result] = (state.inventory[j.result] || 0) + 1;
+      const mat = MATERIALS[j.result];
+      addLog(state, `${WORKSHOPS[j.workshop].name} turned ${j.count} ${ITEMS[j.input].name}${j.count > 1 ? 's' : ''} into ${mat.name} (tier ${mat.tier})!`, now);
+      state.recent = [{ material: j.result, t: now }, ...(state.recent || [])].slice(0, 5);
+      if (!state.discovered.includes(j.result)) state.discovered.push(j.result);
     }
-    const text = Object.entries(made).map(([k, q]) => `${q} ${ITEMS[k].name}${q > 1 ? 's' : ''}`).join(', ');
-    addLog(state, `Workshops finished: ${text}.`, now);
     changed = true;
   }
   const arrived = state.lures.filter((l) => l.endsAt <= now);
@@ -350,11 +371,35 @@ const SAVE_KEY = 'underbrush-kingdom-save';
 
 export function serialize(state) { return JSON.stringify(state); }
 
+/** Upgrades older saves. v1 had generic wood/metal/gem and weapon tiers 1-3. */
+export function migrate(s) {
+  if (s.version === 1) {
+    const map = { wood: 'wood', metal: 'metal', gem: 'crystal' };
+    for (const [old, fam] of Object.entries(map)) {
+      if (s.inventory[old]) s.inventory[materialAt(fam, 1)] = (s.inventory[materialAt(fam, 1)] || 0) + s.inventory[old];
+      delete s.inventory[old];
+    }
+    for (const w of s.weapons) {
+      w.material = materialAt(WEAPONS[w.type].family, Math.min(10, w.tier || 1));
+      delete w.tier;
+    }
+    s.jobs = s.jobs.map((j) => {
+      const ws = WORKSHOPS[j.workshop];
+      return { ...j, input: ws.input, count: 4, result: materialAt(ws.family, 1) };
+    });
+    s.version = 2;
+  }
+  return s;
+}
+
 export function deserialize(json) {
-  const s = JSON.parse(json);
-  if (!s || s.version !== SAVE_VERSION) return null;
+  let s = JSON.parse(json);
+  if (!s) return null;
+  s = migrate(s);
+  if (s.version !== SAVE_VERSION) return null;
   // Make sure new item types added later exist in older saves.
   for (const k of Object.keys(ITEMS)) if (!(k in s.inventory)) s.inventory[k] = 0;
+  if (!s.discovered) s.discovered = Object.keys(MATERIALS).filter((k) => s.inventory[k] > 0);
   return s;
 }
 

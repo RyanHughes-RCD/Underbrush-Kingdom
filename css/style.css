@@ -216,3 +216,33 @@ button { font-family: inherit; font-size: inherit; color: inherit; }
 }
 .scene canvas { display: block; width: 100%; image-rendering: pixelated; cursor: pointer; }
 .scene-note { margin: 6px 0 0; }
+
+/* ---------- Smelting ---------- */
+.satchel .sep { width: 2px; align-self: stretch; background: #44614a; margin: 2px 2px; }
+.odds-list, .jobs { list-style: none; margin: 8px 0; padding: 0; font-size: 14px; }
+.odds-list li, .jobs li { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+.odds-list img, .jobs img { width: 24px; height: 24px; }
+.unknown {
+  width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center;
+  background: #cbbd98; border: 2px solid var(--line); border-radius: 4px; font-weight: 600; font-size: 13px; flex: 0 0 auto;
+}
+.obar { width: 34%; height: 10px; background: #cbbd98; border: 2px solid var(--line); border-radius: 4px; overflow: hidden; }
+.obar > i { display: block; height: 100%; background: var(--accent); }
+.pct { width: 3.4em; text-align: right; font-variant-numeric: tabular-nums; }
+.muted-inv { opacity: .8; font-weight: 400; }
+.jobs li { border-top: 1px dashed #b9a77d; padding-top: 4px; }
+.mat-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.mat {
+  display: flex; flex-direction: column; align-items: center; gap: 0; padding: 4px 0;
+  background: var(--panel-2); border: 2px solid var(--line); border-radius: 5px; font-size: 13px; cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.mat img { width: 32px; height: 32px; }
+.mat.none img { opacity: .45; }
+.mat.locked { cursor: default; background: #d6c9a3; color: var(--ink-soft); }
+.mat.locked .unknown { width: 32px; height: 32px; }
+.craft-list { display: flex; flex-direction: column; gap: 6px; }
+.btn.craft { display: flex; align-items: center; gap: 8px; text-align: left; font-weight: 400; }
+.btn.craft .cost { display: inline-flex; align-items: center; gap: 2px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.btn.craft .cost img { width: 24px; height: 24px; }
+.mat-lg { width: 64px; height: 64px; }

@@ -196,6 +196,32 @@ for name, rows in ICONS.items():
     assert len(rows) == 16 and all(len(r) == 16 for r in rows), name
     render(rows).save(os.path.join(root, 'assets/items', name + '.png'))
 
+# Material icons: each family's base icon, tinted with the material's
+# [dark, mid, light] palette from js/data.js.
+import re
+data_js = open(os.path.join(root, 'js/data.js')).read()
+fam_base = {'metal': 'metal', 'wood': 'wood', 'crystal': 'gem'}
+os.makedirs(os.path.join(root, 'assets/items/materials'), exist_ok=True)
+for fam_block in re.finditer(r"(\w+): \{\s*id: '(\w+)', name: '[^']+', base: '(\w+)',\s*list: \[(.*?)\n    \],", data_js, re.S):
+    base_name = fam_block.group(3)
+    base = render(ICONS[base_name])
+    # Rank the base icon's non-outline colours from dark to light.
+    cols = sorted({base.getpixel((x, y))[:3] for x in range(16) for y in range(16)
+                   if base.getpixel((x, y))[3] and base.getpixel((x, y))[:3] != PAL['k']},
+                  key=lambda c: 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2])
+    for mm in re.finditer(r"m\('(\w+)', '[^']+', \"?.*?\"?, \['(#\w+)', '(#\w+)', '(#\w+)'\]\)", fam_block.group(4)):
+        mid_ = mm.group(1)
+        pal = [tuple(int(h[i:i + 2], 16) for i in (1, 3, 5)) for h in mm.groups()[1:]]
+        # Map dark→dark, the middle shades→mid, lightest→light.
+        mapping = {c: pal[0 if i == 0 else 2 if i == len(cols) - 1 else 1] for i, c in enumerate(cols)}
+        im = base.copy()
+        for x in range(16):
+            for y in range(16):
+                px = im.getpixel((x, y))
+                if px[3] and px[:3] in mapping:
+                    im.putpixel((x, y), mapping[px[:3]] + (255,))
+        im.save(os.path.join(root, 'assets/items/materials', mid_ + '.png'))
+
 # App icons: the three heroes on a mossy tile.
 sprites = [Image.open(os.path.join(root, 'assets/sprites', f)).convert('RGBA')
            for f in ('archer-lizard.png', 'beetle-knight.png', 'wizard-mouse.png')]

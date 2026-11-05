@@ -6,6 +6,9 @@
 // attaches to and its own pivot; it's drawn so its pivot lands on the anchor.
 // Pieces with `wornBy` including a class are always drawn on that class
 // (armour, hats). An equipped weapon replaces any worn piece in the same slot.
+// Weapon art is chosen per material, see weaponPieceId().
+
+import { MATERIALS } from './data.js';
 
 export const PAD = 8; // spare pixels around a body so pieces can stick out
 const CHARS = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -21,7 +24,17 @@ export async function loadSprites(url = 'assets/sprites/sprites.json') {
   return sheet;
 }
 
-export function weaponPieceId(type, tier) { return `${type}-${tier}`; }
+/**
+ * The art piece for a weapon. A piece named after the exact material
+ * (`sword-steel`) wins; otherwise tiers share art in three groups:
+ * `sword-1` for tiers 1-3, `sword-2` for 4-6, `sword-3` for 7-10.
+ */
+export function weaponArtGroup(tier) { return tier <= 3 ? 1 : tier <= 6 ? 2 : 3; }
+export function weaponPieceId(type, materialId, data = sheet) {
+  const exact = `${type}-${materialId}`;
+  if (data?.pieces?.[exact]) return exact;
+  return `${type}-${weaponArtGroup(MATERIALS[materialId]?.tier || 1)}`;
+}
 
 function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
