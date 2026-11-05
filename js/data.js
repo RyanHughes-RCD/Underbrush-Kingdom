@@ -211,70 +211,97 @@ export const WORKSHOPS = {
   },
 };
 
-// Expeditions. Each encounter in a run is drawn from `encounters`.
-// `demand` is the class that shines in that encounter; matching creatures
-// count for more. `loot` weights decide which scrap is found.
-export const EXPEDITIONS = {
-  thicket: {
-    id: 'thicket',
-    name: 'Tangled Thicket',
-    blurb: 'Brambles and fallen branches. Long sightlines reward archers.',
-    baseDifficulty: 6,
-    loot: { twig: 6, bottlecap: 1, pebble: 1 },
+// ---------- Expeditions ----------
+// Every expedition is: a party, a type, a duration (number of encounters)
+// and a region.
+//
+// The TYPE sets which skills are in demand: each encounter is drawn from the
+// type's `encounters`, and `demand` is the class that shines in it (matching
+// fighters count for more).
+export const EXPEDITION_TYPES = {
+  scouting: {
+    id: 'scouting', name: 'Scouting', focus: 'archer',
+    blurb: 'Track trails, spot danger and map the way ahead. Archers shine.',
     encounters: [
-      { name: 'Bramble maze',          demand: 'archer' },
-      { name: 'Ambush of hornets',     demand: 'archer' },
-      { name: 'Grumpy hedgehog',       demand: 'knight' },
-      { name: 'Fallen log crossing',   demand: 'archer' },
-      { name: 'Whispering mushrooms',  demand: 'mage' },
+      { name: 'Track a hidden trail',   demand: 'archer' },
+      { name: 'Spot the ambush',        demand: 'archer' },
+      { name: 'Map the high ground',    demand: 'archer' },
+      { name: 'Shadow a rival scout',   demand: 'archer' },
+      { name: 'Clear a blocked path',   demand: 'knight' },
+      { name: 'Read the old signs',     demand: 'mage' },
     ],
   },
-  gutter: {
-    id: 'gutter',
-    name: 'Old Gutter Drain',
-    blurb: 'Rusty, cramped and full of trash. Armour is a must.',
-    baseDifficulty: 7,
-    loot: { bottlecap: 6, twig: 1, pebble: 1 },
+  skirmish: {
+    id: 'skirmish', name: 'Skirmish', focus: 'knight',
+    blurb: 'Pick a fight and hold the line. Knights shine.',
     encounters: [
-      { name: 'Rat patrol',            demand: 'knight' },
-      { name: 'Rushing water',         demand: 'knight' },
-      { name: 'Jammed grate',          demand: 'knight' },
-      { name: 'Spider nest',           demand: 'archer' },
-      { name: 'Glowing puddle',        demand: 'mage' },
+      { name: 'Break a beetle blockade', demand: 'knight' },
+      { name: 'Hold the bridge',         demand: 'knight' },
+      { name: 'Drive off raiders',       demand: 'knight' },
+      { name: 'Duel a champion',         demand: 'knight' },
+      { name: 'Pin down the archers',    demand: 'archer' },
+      { name: 'Dispel a war charm',      demand: 'mage' },
     ],
   },
-  creek: {
-    id: 'creek',
-    name: 'Glimmer Creek',
-    blurb: 'Smooth stones and odd lights. Magic folk feel at home.',
-    baseDifficulty: 6,
-    loot: { pebble: 6, twig: 1, bottlecap: 1 },
+  research: {
+    id: 'research', name: 'Field Research', focus: 'mage',
+    blurb: 'Study strange lights, odd stones and old magic. Mages shine.',
     encounters: [
-      { name: 'Will-o-wisps',          demand: 'mage' },
-      { name: 'Riddling frog',         demand: 'mage' },
-      { name: 'Slippery stones',       demand: 'mage' },
-      { name: 'Snapping crayfish',     demand: 'knight' },
-      { name: 'Heron overhead',        demand: 'archer' },
+      { name: 'Sample a glowing pool',   demand: 'mage' },
+      { name: 'Decipher a rune stone',   demand: 'mage' },
+      { name: 'Calm a restless spirit',  demand: 'mage' },
+      { name: 'Chart the ley lines',     demand: 'mage' },
+      { name: 'Guard the instruments',   demand: 'knight' },
+      { name: 'Watch for the specimen',  demand: 'archer' },
     ],
   },
-  meadow: {
-    id: 'meadow',
-    name: 'Windy Meadow',
+  excursion: {
+    id: 'excursion', name: 'Excursion', focus: null,
     blurb: 'A bit of everything. Bring a mixed party.',
-    baseDifficulty: 8,
-    loot: { twig: 3, bottlecap: 3, pebble: 3 },
     encounters: [
-      { name: 'Dandelion storm',       demand: 'mage' },
-      { name: 'Stampeding ants',       demand: 'knight' },
-      { name: 'Crow on the hunt',      demand: 'archer' },
-      { name: 'Lost picnic basket',    demand: 'knight' },
-      { name: 'Fairy ring',            demand: 'mage' },
-      { name: 'Grasshopper duel',      demand: 'archer' },
+      { name: 'Forage the undergrowth',  demand: 'archer' },
+      { name: 'Cross rough ground',      demand: 'knight' },
+      { name: 'Puzzle out a riddle',     demand: 'mage' },
+      { name: 'Spot a hawk overhead',    demand: 'archer' },
+      { name: 'Face down a toad',        demand: 'knight' },
+      { name: 'Follow the fairy ring',   demand: 'mage' },
     ],
   },
 };
+export const EXPEDITION_TYPE_IDS = Object.keys(EXPEDITION_TYPES);
 
-export const EXPEDITION_IDS = Object.keys(EXPEDITIONS);
+// The REGION sets the difficulty and the rewards. Encounter difficulty is
+// `baseDifficulty + 1.5 * encounterIndex`. Each won encounter finds
+// 1-3 scrap, plus one more for every 3 encounters deep, plus `bonusFinds`;
+// fighters gain `xpPerWin` XP per won encounter. `loot` weights decide which
+// scrap is found. Listed easiest first.
+export const REGIONS = {
+  meadow: {
+    id: 'meadow', name: 'Windy Meadow', level: 1,
+    blurb: 'Open grass and gentle breezes. A good place to start.',
+    baseDifficulty: 5, bonusFinds: 0, xpPerWin: 1,
+    loot: { twig: 3, bottlecap: 3, pebble: 3 },
+  },
+  thicket: {
+    id: 'thicket', name: 'Tangled Thicket', level: 2,
+    blurb: 'Brambles and fallen branches, thick with twigs.',
+    baseDifficulty: 10, bonusFinds: 1, xpPerWin: 1,
+    loot: { twig: 6, bottlecap: 1, pebble: 1 },
+  },
+  creek: {
+    id: 'creek', name: 'Glimmer Creek', level: 3,
+    blurb: 'Smooth stones and odd lights along the water.',
+    baseDifficulty: 17, bonusFinds: 2, xpPerWin: 2,
+    loot: { pebble: 6, twig: 1, bottlecap: 1 },
+  },
+  gutter: {
+    id: 'gutter', name: 'Old Gutter Drain', level: 4,
+    blurb: 'Rusty, cramped and dangerous. Bottle caps everywhere.',
+    baseDifficulty: 26, bonusFinds: 3, xpPerWin: 3,
+    loot: { bottlecap: 6, twig: 1, pebble: 1 },
+  },
+};
+export const REGION_IDS = Object.keys(REGIONS);
 
 // Luring new recruits: leave a crafted weapon at the Lure Post and a new
 // creature of that weapon's class comes to claim it.

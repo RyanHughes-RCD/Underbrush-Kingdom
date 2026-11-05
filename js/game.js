@@ -2,14 +2,14 @@
 // matters) and mutates/returns it. No DOM access here so it can be unit tested.
 
 import {
-  CLASSES, CLASS_IDS, ITEMS, WEAPONS, WORKSHOPS, EXPEDITIONS, SCRAPS, MATERIALS,
+  CLASSES, CLASS_IDS, ITEMS, WEAPONS, WORKSHOPS, EXPEDITION_TYPES, REGIONS, SCRAPS, MATERIALS,
   materialAt, SMELT_FALLOFF, MAX_BATCH, WEAPON_COST, ACCENT_WORD,
   ENCOUNTER_MINUTES, MIN_ENCOUNTERS, MAX_ENCOUNTERS, MAX_PARTY,
   LURE_MINUTES, MAX_ROSTER,
 } from './data.js';
 import * as ST from './stats.js';
 
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 const MINUTE = 60 * 1000;
 
 // Debug/testing: multiplies the speed of all timers. Set via ?speed=60.
@@ -125,9 +125,15 @@ export function isBusy(state, creatureId) {
 }
 
 // ---------- Expeditions ----------
+// An expedition is a party, a type (which skills are in demand), a duration
+// (number of encounters) and a region (difficulty and rewards).
 
-export function encounterDifficulty(exp, index) {
-  return exp.baseDifficulty + index * 1.5;
+export function encounterDifficulty(region, index) {
+  return region.baseDifficulty + index * 1.5;
+}
+
+export function expeditionName(typeId, regionId) {
+  return `${EXPEDITION_TYPES[typeId].name} in ${REGIONS[regionId].name}`;
 }
 
 export function partyScore(state, partyIds, demand) {
@@ -142,22 +148,27 @@ export function successChance(score, difficulty) {
   return Math.min(0.95, Math.max(0.1, score / (score + difficulty)));
 }
 
-/** Rough odds shown to the player before setting out. */
-export function previewExpedition(state, typeId, partyIds, count) {
-  const exp = EXPEDITIONS[typeId];
+/** Expected scrap from one won encounter at this depth in this region. */
+export function expectedFinds(region, index) { return 2 + Math.floor(index / 3) + region.bonusFinds; }
+
+/** Rough odds and rewards shown to the player before setting out. */
+export function previewExpedition(state, typeId, regionId, partyIds, count) {
+  const type = EXPEDITION_TYPES[typeId], region = REGIONS[regionId];
   const byDemand = {};
   for (const cls of CLASS_IDS) byDemand[cls] = partyScore(state, partyIds, cls);
-  let total = 0;
+  let wins = 0, finds = 0;
   for (let i = 0; i < count; i++) {
-    const d = encounterDifficulty(exp, i);
-    const avg = exp.encounters.reduce((s, e) => s + successChance(byDemand[e.demand], d), 0) / exp.encounters.length;
-    total += avg;
+    const d = encounterDifficulty(region, i);
+    const p = type.encounters.reduce((s, e) => s + successChance(byDemand[e.demand], d), 0) / type.encounters.length;
+    wins += p;
+    finds += p * expectedFinds(region, i) + (1 - p) * 0.5;
   }
-  return { expectedWins: total, avgChance: count ? total / count : 0 };
+  return { expectedWins: wins, avgChance: count ? wins / count : 0, expectedFinds: finds, expectedXp: wins * region.xpPerWin };
 }
 
-export function canStartExpedition(state, typeId, partyIds, count) {
-  if (!EXPEDITIONS[typeId]) return 'Unknown expedition.';
+export function canStartExpedition(state, typeId, regionId, partyIds, count) {
+  if (!EXPEDITION_TYPES[typeId]) return 'Choose an expedition type.';
+  if (!REGIONS[regionId]) return 'Choose a region.';
   if (!partyIds.length) return 'Choose at least one fighter.';
   if (partyIds.length > MAX_PARTY) return `A party can have at most ${MAX_PARTY} fighters.`;
   if (new Set(partyIds).size !== partyIds.length) return 'Duplicate fighter.';
@@ -175,21 +186,21 @@ export function canStartExpedition(state, typeId, partyIds, count) {
  * Starts an expedition. Encounter outcomes are rolled immediately (seeded) and
  * revealed to the player one by one as each 10-minute encounter elapses.
  */
-export function startExpedition(state, typeId, partyIds, count, now = Date.now()) {
-  const err = canStartExpedition(state, typeId, partyIds, count);
+export function startExpedition(state, typeId, regionId, partyIds, count, now = Date.now()) {
+  const err = canStartExpedition(state, typeId, regionId, partyIds, count);
   if (err) throw new Error(err);
-  const exp = EXPEDITIONS[typeId];
+  const type = EXPEDITION_TYPES[typeId], region = REGIONS[regionId];
   const rng = mulberry32(nextSeed(state));
   const encounters = [];
   for (let i = 0; i < count; i++) {
-    const tpl = pick(rng, exp.encounters);
-    const difficulty = encounterDifficulty(exp, i);
+    const tpl = pick(rng, type.encounters);
+    const difficulty = encounterDifficulty(region, i);
     const chance = successChance(partyScore(state, partyIds, tpl.demand), difficulty);
     const success = rng() < chance;
     const loot = {};
-    const finds = success ? 1 + Math.floor(rng() * 3) + Math.floor(i / 3) : (rng() < 0.5 ? 1 : 0);
+    const finds = success ? 1 + Math.floor(rng() * 3) + Math.floor(i / 3) + region.bonusFinds : (rng() < 0.5 ? 1 : 0);
     for (let f = 0; f < finds; f++) {
-      const item = pickWeighted(rng, exp.loot);
+      const item = pickWeighted(rng, region.loot);
       loot[item] = (loot[item] || 0) + 1;
     }
     encounters.push({ name: tpl.name, demand: tpl.demand, difficulty, chance, success, loot });
@@ -197,6 +208,7 @@ export function startExpedition(state, typeId, partyIds, count, now = Date.now()
   const e = {
     id: newId(state, 'e'),
     type: typeId,
+    region: regionId,
     partyIds: [...partyIds],
     startedAt: now,
     encounterMs: minutesToMs(ENCOUNTER_MINUTES),
@@ -204,7 +216,7 @@ export function startExpedition(state, typeId, partyIds, count, now = Date.now()
   };
   state.expeditions.push(e);
   const names = partyIds.map((id) => getCreature(state, id).name).join(', ');
-  addLog(state, `${names} set out for ${exp.name} (${count} encounters).`, now);
+  addLog(state, `${names} set out: ${expeditionName(typeId, regionId)} (${count} encounters).`, now);
   return e;
 }
 
@@ -232,14 +244,15 @@ export function claimExpedition(state, expeditionId, now = Date.now()) {
   }
   for (const [k, q] of Object.entries(loot)) state.inventory[k] = (state.inventory[k] || 0) + q;
   state.expeditions.splice(idx, 1);
+  const xp = wins * (REGIONS[e.region]?.xpPerWin || 1);
   for (const id of e.partyIds) {
     const c = getCreature(state, id);
-    if (c) grantXp(state, c, wins, now);
+    if (c) grantXp(state, c, xp, now);
   }
   const lootText = Object.entries(loot).map(([k, q]) => `${q} ${ITEMS[k].name}${q > 1 ? 's' : ''}`).join(', ') || 'nothing';
   const early = done < e.encounters.length ? ' early' : '';
-  addLog(state, `Party returned${early} from ${EXPEDITIONS[e.type].name}: ${wins}/${done} encounters won, found ${lootText}.`, now);
-  return { loot, wins, done };
+  addLog(state, `Party returned${early} from ${expeditionName(e.type, e.region)}: ${wins}/${done} encounters won, found ${lootText}.`, now);
+  return { loot, wins, done, xp };
 }
 
 // ---------- Workshops (smelting scrap into materials) ----------
@@ -387,7 +400,7 @@ const SAVE_KEY = 'underbrush-kingdom-save';
 
 export function serialize(state) { return JSON.stringify(state); }
 
-/** Upgrades older saves. v1 had generic wood/metal/gem and weapon tiers 1-3; v2 had one weapon type per class; v3 weapons had one material. */
+/** Upgrades older saves. v1 had generic wood/metal/gem and weapon tiers 1-3; v2 had one weapon type per class; v3 weapons had one material; v4 expeditions were zones, now type + region. */
 export function migrate(s) {
   if (s.version === 1) {
     const map = { wood: 'wood', metal: 'metal', gem: 'crystal' };
@@ -415,6 +428,12 @@ export function migrate(s) {
     // v3 weapons were one material; they get basic (tier 1) fittings.
     for (const w of s.weapons) if (!w.accent) w.accent = materialAt(WEAPONS[w.type].accentFamily, 1);
     s.version = 4;
+  }
+  if (s.version === 4) {
+    // v4 expeditions were one of four zones; each became a type plus a region.
+    const map = { thicket: 'scouting', gutter: 'skirmish', creek: 'research', meadow: 'excursion' };
+    for (const e of s.expeditions) if (!e.region) { e.region = e.type; e.type = map[e.type] || 'excursion'; }
+    s.version = 5;
   }
   return s;
 }

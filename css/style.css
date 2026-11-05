@@ -295,3 +295,27 @@ button { font-family: inherit; font-size: inherit; color: inherit; }
 .bench-preview { display: flex; gap: 10px; align-items: center; margin: 8px 0; padding: 8px; background: var(--panel-2); border: 2px dashed #b9a77d; border-radius: 6px; }
 .bench-art { width: 56px; height: 64px; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
 .bench-art img { max-height: 64px; width: auto !important; }
+
+/* ---------- Expedition planner ---------- */
+.planner { display: flex; flex-direction: column; gap: 10px; }
+.plan-step { border-bottom: 2px dashed #b9a77d; padding-bottom: 10px; }
+.step-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 15px; }
+.step-n {
+  width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--line); background: var(--panel-2);
+  display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; flex: 0 0 auto;
+}
+.plan-step.done .step-n { background: var(--accent-2); color: #fff7e6; }
+.opt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.opt-list { display: flex; flex-direction: column; gap: 6px; }
+.opt {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; cursor: pointer;
+  background: var(--panel-2); border: 2px solid var(--line); border-radius: 6px; padding: 6px 8px; min-width: 0;
+}
+.opt .demands { margin: 0; }
+.opt .demands img { width: 24px; height: 24px; margin: 0 !important; }
+.opt.on { background: #f0c46a; box-shadow: inset 0 0 0 2px #fff7e6; }
+.opt.region .row { width: 100%; }
+.pips { display: inline-flex; gap: 2px; vertical-align: middle; }
+.pips i { width: 9px; height: 9px; border: 2px solid var(--line); border-radius: 2px; background: var(--panel); }
+.pips i.on { background: var(--warn); }
+.plan-summary { min-height: 2.6em; }

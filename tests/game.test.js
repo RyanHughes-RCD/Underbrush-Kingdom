@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as G from '../js/game.js';
-import { ENCOUNTER_MINUTES, WORKSHOPS, LURE_MINUTES } from '../js/data.js';
+import { ENCOUNTER_MINUTES, WORKSHOPS, LURE_MINUTES, REGIONS } from '../js/data.js';
 
 const MIN = 60 * 1000;
 
@@ -14,7 +14,7 @@ test('new game starts with one fighter of each class', () => {
 test('expedition duration is 10 minutes per encounter', () => {
   const s = G.newGame(1);
   const ids = s.creatures.map((c) => c.id);
-  const e = G.startExpedition(s, 'thicket', ids, 6, 0);
+  const e = G.startExpedition(s, 'scouting', 'thicket', ids, 6, 0);
   assert.equal(G.expeditionEndsAt(e), 6 * ENCOUNTER_MINUTES * MIN);
   assert.equal(G.encountersDone(e, 25 * MIN), 2);
   assert.ok(!G.isExpeditionComplete(e, 59 * MIN));
@@ -24,14 +24,14 @@ test('expedition duration is 10 minutes per encounter', () => {
 test('busy fighters cannot join another expedition', () => {
   const s = G.newGame(1);
   const [a] = s.creatures;
-  G.startExpedition(s, 'creek', [a.id], 1, 0);
-  assert.throws(() => G.startExpedition(s, 'creek', [a.id], 1, 0));
+  G.startExpedition(s, 'research', 'creek', [a.id], 1, 0);
+  assert.throws(() => G.startExpedition(s, 'research', 'creek', [a.id], 1, 0));
 });
 
 test('claiming adds loot and frees the party; early return keeps partial loot', () => {
   const s = G.newGame(7);
   const ids = s.creatures.map((c) => c.id);
-  const e = G.startExpedition(s, 'meadow', ids, 4, 0);
+  const e = G.startExpedition(s, 'excursion', 'meadow', ids, 4, 0);
   const expected = e.encounters.slice(0, 2).reduce((n, enc) => n + Object.values(enc.loot).reduce((a, b) => a + b, 0), 0);
   const r = G.claimExpedition(s, e.id, 2 * ENCOUNTER_MINUTES * MIN);
   assert.equal(r.done, 2);
@@ -39,6 +39,55 @@ test('claiming adds loot and frees the party; early return keeps partial loot', 
   assert.equal(total, expected);
   assert.equal(s.expeditions.length, 0);
   assert.ok(!G.isBusy(s, ids[0]));
+});
+
+test('an expedition needs a type and a region', () => {
+  const s = G.newGame(2);
+  const ids = s.creatures.map((c) => c.id);
+  assert.throws(() => G.startExpedition(s, 'scouting', null, ids, 2, 0), /region/);
+  assert.throws(() => G.startExpedition(s, null, 'meadow', ids, 2, 0), /type/);
+  const e = G.startExpedition(s, 'skirmish', 'gutter', ids, 2, 0);
+  assert.equal(e.type, 'skirmish');
+  assert.equal(e.region, 'gutter');
+  assert.equal(G.expeditionName(e.type, e.region), 'Skirmish in Old Gutter Drain');
+});
+
+test('the type sets which class is in demand', () => {
+  const s = G.newGame(4);
+  const ids = s.creatures.map((c) => c.id);
+  const e = G.startExpedition(s, 'scouting', 'meadow', ids, 12, 0);
+  const archers = e.encounters.filter((x) => x.demand === 'archer').length;
+  assert.ok(archers > 12 / 3, `scouting should mostly want archers (${archers}/12)`);
+});
+
+test('harder regions are harder and pay better', () => {
+  const s = G.newGame(6);
+  const ids = s.creatures.map((c) => c.id);
+  const easy = G.previewExpedition(s, 'excursion', 'meadow', ids, 6);
+  const hard = G.previewExpedition(s, 'excursion', 'gutter', ids, 6);
+  assert.ok(hard.avgChance < easy.avgChance);
+  // Per win, the hard region finds more scrap and gives more XP.
+  assert.ok(hard.expectedFinds / hard.expectedWins > easy.expectedFinds / easy.expectedWins);
+  assert.ok(hard.expectedXp / hard.expectedWins > easy.expectedXp / easy.expectedWins);
+  const order = Object.values(REGIONS).map((r) => r.baseDifficulty);
+  assert.deepEqual(order, [...order].sort((a, b) => a - b));
+});
+
+test('XP per win comes from the region', () => {
+  const s = G.newGame(8);
+  const ids = s.creatures.map((c) => c.id);
+  const e = G.startExpedition(s, 'excursion', 'gutter', ids, 3, 0);
+  const wins = e.encounters.filter((x) => x.success).length;
+  const r = G.claimExpedition(s, e.id, 3 * ENCOUNTER_MINUTES * MIN);
+  assert.equal(r.xp, wins * REGIONS.gutter.xpPerWin);
+});
+
+test('version 4 saves: zone expeditions become a type plus a region', () => {
+  const v4 = { version: 4, seed: 1, nextId: 3, creatures: [], lures: [], log: [], jobs: [], discovered: [], inventory: {}, weapons: [],
+    expeditions: [{ id: 'e1', type: 'gutter', partyIds: [], startedAt: 0, encounterMs: 1, encounters: [] }] };
+  const s = G.deserialize(JSON.stringify(v4));
+  assert.equal(s.expeditions[0].type, 'skirmish');
+  assert.equal(s.expeditions[0].region, 'gutter');
 });
 
 test('smelting odds: 3 bottle caps give about 50% iron, never above steel', () => {

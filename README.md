@@ -11,13 +11,23 @@ A phone-first web game about a band of tiny heroes living in the underbrush. Col
 ## How it plays
 
 1. **Start small.** You begin with three fighters: one of each class.
-2. **Expeditions.** Pick an expedition type. Each one has its own *demands*, meaning which classes its encounters favour:
-   | Expedition | Favours | Mostly finds |
-   |---|---|---|
-   | Tangled Thicket | Archer Lizards | Stray twigs |
-   | Old Gutter Drain | Beetle Knights | Bottle caps |
-   | Glimmer Creek | Wizard Mice | Pebbles |
-   | Windy Meadow | A mixed party | A bit of everything |
+2. **Expeditions.** Every expedition is a **party**, a **type**, a **duration** and a **region**.
+   - The **type** decides which skills are in demand (fighters of that class count for more):
+
+     | Type | In demand |
+     |---|---|
+     | Scouting | Archer Lizards |
+     | Skirmish | Beetle Knights |
+     | Field Research | Wizard Mice |
+     | Excursion | A mixed party |
+   - The **region** decides how hard it is and how much you bring back. Harder regions find more scrap per win and give more XP:
+
+     | Region | Difficulty | Mostly finds | Extra finds per win | XP per win |
+     |---|---|---|---|---|
+     | Windy Meadow | 1 | A bit of everything | — | 1 |
+     | Tangled Thicket | 2 | Twigs | +1 | 1 |
+     | Glimmer Creek | 3 | Pebbles | +2 | 2 |
+     | Old Gutter Drain | 4 | Bottle caps | +3 | 3 |
 3. **Duration = encounters.** Choose 1–12 encounters, 10 minutes each (6 encounters = 1 hour). Results are revealed one encounter at a time. Later encounters are harder but give more. You can recall a party early and keep what they've already found.
 4. **Workshops.** Put scrap into a workshop to smelt it into one material. Each family has 10 tiers:
    - Woodworker's Cabin: twigs → **woods** (Pine, Oak, Ashwood … Godwood)

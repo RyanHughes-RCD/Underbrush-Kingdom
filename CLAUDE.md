@@ -2,6 +2,11 @@
 
 Static web game with no build step (HTML, CSS and ES modules). `npm test` runs the Node tests. GitHub Pages deploys from `main` through `.github/workflows/pages.yml`.
 
+## Expeditions
+
+- An expedition is a party, a type (`EXPEDITION_TYPES` in `js/data.js`: scouting, skirmish, research, excursion; each has its own encounter list with a `demand` class) and a region (`REGIONS`: meadow, thicket, creek, gutter, easiest first; each sets `baseDifficulty`, `bonusFinds`, `xpPerWin` and `loot` weights), plus a number of encounters (10 minutes each).
+- Encounter difficulty = region base + 1.5 × index. Odds and rewards are in `previewExpedition()` / `startExpedition()` in `js/game.js`. Saved expeditions store `type` and `region`.
+
 ## Stats
 
 - `STATS`, `CLASS_STATS` (base + growth per level), weapon `attack` and `scaling` in `WEAPONS`, `TIER_QUALITY` and `GRADES` all live in `js/data.js`. The formulas are in `js/stats.js`: stat = floor(base + growth × (level − 1)); quality = (2 × main + fittings) / 3; damage = quality × (attack + Σ scaling × stat); power = (damage + (MIG + SPI + LCK) / 2 + HP / 4) / 5.
