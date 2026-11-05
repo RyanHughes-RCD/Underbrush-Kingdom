@@ -4,6 +4,7 @@ import {
   ENCOUNTER_MINUTES, MIN_ENCOUNTERS, MAX_ENCOUNTERS, MAX_PARTY, LURE_MINUTES,
 } from './data.js';
 import * as G from './game.js';
+import { CampScene } from './scene.js';
 
 const params = new URLSearchParams(location.search);
 if (params.has('speed')) G.setTimeScale(Number(params.get('speed')));
@@ -70,10 +71,28 @@ function creatureCard(c) {
     </button>`;
 }
 
+function awayNote() {
+  const away = state.creatures.filter((c) => G.isBusy(state, c.id)).length;
+  return away ? `<p class="hint scene-note">${away} fighter${away > 1 ? 's are' : ' is'} out on an expedition.</p>` : '';
+}
+
+const scene = new CampScene({ onTap: (id) => openCreature(id) });
+
+function mountScene() {
+  const slot = document.getElementById('scene-slot');
+  if (!slot) { scene.stop(); return; }
+  slot.replaceWith(scene.el);
+  scene.resize();
+  scene.setCreatures(state.creatures.filter((c) => !G.isBusy(state, c.id)));
+  if (!document.hidden) scene.start();
+}
+
 function renderCamp() {
   const free = G.freeWeapons(state);
   const lures = state.lures;
   return `
+    <div id="scene-slot"></div>
+    ${awayNote()}
     <h2>Your Band (${state.creatures.length})</h2>
     <p class="hint">Tap a fighter to see details or hand them a weapon.</p>
     <div class="roster">${state.creatures.map(creatureCard).join('')}</div>
@@ -257,6 +276,7 @@ function renderWorkshops() {
 function render() {
   renderSatchel();
   view.innerHTML = ui.tab === 'camp' ? renderCamp() : ui.tab === 'expeditions' ? renderExpeditions() : renderWorkshops();
+  mountScene();
   const ready = state.expeditions.some((e) => G.isExpeditionComplete(e));
   document.querySelectorAll('#tabs button').forEach((b) => {
     b.classList.toggle('active', b.dataset.tab === ui.tab);
@@ -348,7 +368,9 @@ function openModal(html) {
 function closeModal() { $('#modal').hidden = true; }
 $('#modal').addEventListener('click', (ev) => { if (ev.target.id === 'modal') closeModal(); });
 
-document.addEventListener('visibilitychange', () => { if (!document.hidden) loop(); else save(); });
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) { loop(); if (ui.tab === 'camp') scene.start(); } else { save(); scene.stop(); }
+});
 
 // Boot
 G.tick(state);

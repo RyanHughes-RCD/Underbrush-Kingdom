@@ -206,3 +206,13 @@ button { font-family: inherit; font-size: inherit; color: inherit; }
 }
 .toast[hidden] { display: none; }
 .modal .sheet .portrait-lg { width: 96px; height: 96px; }
+
+/* ---------- Camp scene ---------- */
+.scene {
+  margin: -12px -16px 4px;
+  border-bottom: 3px solid #121b14;
+  background: #3a6a2d;
+  line-height: 0;
+}
+.scene canvas { display: block; width: 100%; image-rendering: pixelated; cursor: pointer; }
+.scene-note { margin: 6px 0 0; }

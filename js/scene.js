@@ -1,0 +1,339 @@
+// The camp scene: a grassy clearing ringed by trees, where fighters who are at
+// camp wander about. Everything is drawn at a low "logical" resolution and
+// scaled up by a whole number so the pixel art stays crisp.
+
+import { CLASSES } from './data.js';
+import { mulberry32 } from './game.js';
+
+const SCENE_H = 160;         // logical pixels tall
+const TARGET_W = 190;        // roughly how many logical pixels wide
+const WALK_SPEED = 11;       // logical px per second
+const SPRITE = 32;
+
+const GRASS = ['#4f8a3a', '#55913e', '#4a8336', '#5a9642'];
+const TUFT_LIGHT = '#6dab4c';
+const TUFT_DARK = '#3b6d2d';
+const FLOWERS = ['#f4f0d4', '#f2c94c', '#e58fb8', '#9fc3f0'];
+
+const LEAF = { outline: '#132313', shades: ['#1f3d24', '#2b5e30', '#3f8239', '#5fa043', '#86be52'] };
+const PINE = { outline: '#102019', shades: ['#173a2e', '#21523b', '#2f6d4a', '#43875a', '#5f9e68'] };
+const BARK = { outline: '#1f140c', shades: ['#3a2416', '#5c3a22', '#7a5030'] };
+
+const spriteCache = {};
+function spriteImage(cls) {
+  if (!spriteCache[cls]) {
+    const img = new Image();
+    img.src = CLASSES[cls].sprite;
+    spriteCache[cls] = img;
+  }
+  return spriteCache[cls];
+}
+
+function makeCanvas(w, h) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  return c;
+}
+
+// ---------- Procedural pixel trees ----------
+
+function makeTree(rng, kind) {
+  const W = 32, H = 46;
+  const c = makeCanvas(W, H);
+  const ctx = c.getContext('2d');
+  const grid = Array.from({ length: H }, () => new Array(W).fill(null));
+  const pal = kind === 'pine' ? PINE : LEAF;
+
+  // Trunk
+  const tw = kind === 'pine' ? 3 : 4;
+  const tx = Math.floor(W / 2 - tw / 2);
+  for (let y = 24; y < H - 1; y++) {
+    for (let x = tx; x < tx + tw; x++) grid[y][x] = { t: 'bark', s: x === tx ? 0 : x === tx + tw - 1 ? 1 : 2 };
+  }
+  // Roots
+  grid[H - 2][tx - 1] = { t: 'bark', s: 0 };
+  grid[H - 2][tx + tw] = { t: 'bark', s: 1 };
+
+  // Canopy mask
+  const inCanopy = [];
+  if (kind === 'pine') {
+    const tiers = 3 + Math.floor(rng() * 2);
+    for (let i = 0; i < tiers; i++) {
+      const top = 2 + i * 7, bottom = top + 13, half = 5 + i * 2.6;
+      inCanopy.push((x, y) => y >= top && y <= bottom && Math.abs(x - W / 2 + 0.5) <= ((y - top) / (bottom - top)) * half + 0.5);
+    }
+  } else {
+    const blobs = [{ x: 16, y: 15, r: 11 + rng() * 2 }];
+    const n = 2 + Math.floor(rng() * 3);
+    for (let i = 0; i < n; i++) {
+      blobs.push({ x: 16 + (rng() - 0.5) * 14, y: 14 + (rng() - 0.3) * 10, r: 6 + rng() * 3.5 });
+    }
+    for (const b of blobs) inCanopy.push((x, y) => (x - b.x) ** 2 + (y - b.y) ** 2 <= b.r * b.r);
+  }
+  const cx = W / 2, cy = kind === 'pine' ? 18 : 14;
+  for (let y = 1; y < H - 1; y++) {
+    for (let x = 1; x < W - 1; x++) {
+      if (!inCanopy.some((f) => f(x, y))) continue;
+      // Light from the top-left, plus some leafy noise.
+      const light = (-(x - cx) * 0.6 - (y - cy)) / 14 + (rng() - 0.5) * 0.7;
+      const s = Math.max(0, Math.min(4, Math.round(2 + light * 1.6)));
+      grid[y][x] = { t: 'leaf', s };
+    }
+  }
+
+  // Paint, then add an outline around the whole silhouette.
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const p = grid[y][x];
+      if (p) {
+        ctx.fillStyle = p.t === 'bark' ? BARK.shades[p.s] : pal.shades[p.s];
+        ctx.fillRect(x, y, 1, 1);
+      } else {
+        const near = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => grid[y + dy]?.[x + dx]).filter(Boolean);
+        if (near.length) {
+          ctx.fillStyle = near.some((n) => n.t === 'leaf') ? pal.outline : BARK.outline;
+          ctx.fillRect(x, y, 1, 1);
+        }
+      }
+    }
+  }
+  return { canvas: c, w: W, h: H };
+}
+
+// ---------- Scene ----------
+
+export class CampScene {
+  constructor({ onTap } = {}) {
+    this.onTap = onTap;
+    this.el = document.createElement('div');
+    this.el.className = 'scene';
+    this.canvas = document.createElement('canvas');
+    this.el.appendChild(this.canvas);
+    this.ctx = this.canvas.getContext('2d');
+    this.walkers = new Map();
+    this.running = false;
+    this.last = 0;
+    this.W = 0;
+    this.scale = 1;
+    this.rng = mulberry32(1234);
+
+    this.canvas.addEventListener('click', (ev) => this.handleTap(ev));
+    new ResizeObserver(() => this.resize()).observe(this.el);
+  }
+
+  resize() {
+    const cssW = this.el.clientWidth;
+    if (!cssW) return;
+    const dpr = window.devicePixelRatio || 1;
+    const devW = Math.round(cssW * dpr);
+    const s = Math.max(1, Math.round(devW / TARGET_W));
+    const W = Math.ceil(devW / s);
+    this.canvas.width = devW;
+    this.canvas.height = SCENE_H * s;
+    this.canvas.style.height = `${(SCENE_H * s) / dpr}px`;
+    this.scale = s;
+    if (W !== this.W) {
+      const first = !this.W;
+      this.W = W;
+      this.build();
+      for (const w of this.walkers.values()) {
+        const p = first ? this.randomSpot() : this.clamp(w.x, w.y);
+        Object.assign(w, p, { tx: p.x, ty: p.y });
+      }
+    }
+    this.draw(0);
+  }
+
+  // The walkable clearing is an ellipse in the middle of the scene.
+  clearing() {
+    return { cx: this.W / 2, cy: 94, rx: this.W / 2 - 34, ry: 30 };
+  }
+
+  clamp(x, y) {
+    const { cx, cy, rx, ry } = this.clearing();
+    const dx = (x - cx) / rx, dy = (y - cy) / ry;
+    const d = Math.hypot(dx, dy);
+    return d <= 1 ? { x, y } : { x: cx + (dx / d) * rx, y: cy + (dy / d) * ry };
+  }
+
+  randomSpot() {
+    const { cx, cy, rx, ry } = this.clearing();
+    const a = this.rng() * Math.PI * 2, r = Math.sqrt(this.rng());
+    return { x: cx + Math.cos(a) * rx * r, y: cy + Math.sin(a) * ry * r };
+  }
+
+  build() {
+    const W = this.W, H = SCENE_H;
+    const rng = mulberry32(98765);
+
+    // Grass
+    const bg = makeCanvas(W, H);
+    const g = bg.getContext('2d');
+    g.fillStyle = GRASS[0];
+    g.fillRect(0, 0, W, H);
+    for (let i = 0; i < W * H * 0.25; i++) {
+      g.fillStyle = GRASS[1 + Math.floor(rng() * 3)];
+      g.fillRect(Math.floor(rng() * W), Math.floor(rng() * H), 1, 1);
+    }
+    // Darker grass in the shade near the forest edge
+    const { cx, cy, rx, ry } = this.clearing();
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const d = Math.hypot((x - cx) / (rx + 18), (y - cy) / (ry + 40));
+        if (d > 1 && rng() < Math.min(0.85, (d - 1) * 2.2)) {
+          g.fillStyle = rng() < 0.5 ? '#3e7230' : '#3a6a2d';
+          g.fillRect(x, y, 1, 1);
+        }
+      }
+    }
+    // Tufts and flowers
+    for (let i = 0; i < W * 0.5; i++) {
+      const x = Math.floor(rng() * W), y = Math.floor(rng() * H);
+      g.fillStyle = TUFT_DARK;
+      g.fillRect(x, y, 1, 1); g.fillRect(x + 2, y, 1, 1);
+      g.fillStyle = TUFT_LIGHT;
+      g.fillRect(x + 1, y - 1, 1, 2);
+    }
+    for (let i = 0; i < W * 0.12; i++) {
+      const p = this.randomSpot();
+      const x = Math.round(p.x + (rng() - 0.5) * 20), y = Math.round(p.y + (rng() - 0.5) * 16);
+      g.fillStyle = FLOWERS[Math.floor(rng() * FLOWERS.length)];
+      g.fillRect(x, y, 1, 1);
+      g.fillStyle = TUFT_DARK;
+      g.fillRect(x, y + 1, 1, 1);
+    }
+    // A few pebbles
+    for (let i = 0; i < 5; i++) {
+      const p = this.randomSpot();
+      g.fillStyle = '#8d8a80'; g.fillRect(Math.round(p.x), Math.round(p.y), 2, 1);
+      g.fillStyle = '#b9b5a8'; g.fillRect(Math.round(p.x), Math.round(p.y), 1, 1);
+    }
+    this.bg = bg;
+
+    // Trees around the borders. Each is placed by the base of its trunk so
+    // trees and creatures can be depth-sorted together.
+    const variants = [];
+    for (let i = 0; i < 6; i++) variants.push(makeTree(rng, 'round'));
+    for (let i = 0; i < 4; i++) variants.push(makeTree(rng, 'pine'));
+    const trees = [];
+    const add = (x, y) => trees.push({ x: Math.round(x), y: Math.round(y), t: variants[Math.floor(rng() * variants.length)] });
+    for (let row = 0; row < 3; row++) {                       // top: three staggered rows
+      for (let x = -12 + row * 7; x < W + 16; x += 15 + rng() * 6) add(x, 22 + row * 12 + rng() * 5);
+    }
+    for (let y = 58; y < H; y += 13 + rng() * 5) {              // left and right edges
+      add(4 + rng() * 10, y); add(-10 + rng() * 6, y + 6);
+      add(W - 4 - rng() * 10, y); add(W + 10 - rng() * 6, y + 6);
+    }
+    for (let x = -10; x < W + 16; x += 15 + rng() * 6) add(x, H + 16 + rng() * 8); // bottom edge
+    this.trees = trees;
+  }
+
+  setCreatures(list) {
+    const ids = new Set(list.map((c) => c.id));
+    for (const id of this.walkers.keys()) if (!ids.has(id)) this.walkers.delete(id);
+    for (const c of list) {
+      if (this.walkers.has(c.id)) continue;
+      const p = this.randomSpot();
+      this.walkers.set(c.id, {
+        id: c.id, cls: c.cls, x: p.x, y: p.y, tx: p.x, ty: p.y,
+        wait: this.rng() * 2, facing: this.rng() < 0.5 ? 1 : -1,
+        phase: this.rng() * Math.PI * 2, moving: false,
+      });
+    }
+  }
+
+  start() {
+    if (this.running) return;
+    this.running = true;
+    this.last = performance.now();
+    const frame = (now) => {
+      if (!this.running) return;
+      const dt = Math.min(0.1, (now - this.last) / 1000);
+      this.last = now;
+      this.update(dt);
+      this.draw(now / 1000);
+      requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  }
+
+  stop() { this.running = false; }
+
+  update(dt) {
+    for (const w of this.walkers.values()) {
+      if (w.wait > 0) {
+        w.wait -= dt;
+        w.moving = false;
+        w.phase += dt * 3;
+        if (w.wait <= 0) {
+          const p = this.randomSpot();
+          w.tx = p.x; w.ty = p.y;
+        }
+        continue;
+      }
+      const dx = w.tx - w.x, dy = w.ty - w.y;
+      const d = Math.hypot(dx, dy);
+      if (d < 0.5) {
+        w.wait = 1.5 + this.rng() * 4;
+        continue;
+      }
+      w.moving = true;
+      const step = Math.min(d, WALK_SPEED * dt);
+      w.x += (dx / d) * step;
+      w.y += (dy / d) * step;
+      if (Math.abs(dx) > 0.5) w.facing = dx > 0 ? 1 : -1;
+      w.phase += dt * 11;
+    }
+  }
+
+  draw() {
+    const { ctx, scale: s } = this;
+    if (!this.bg) return;
+    ctx.imageSmoothingEnabled = false;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(this.bg, 0, 0, this.W * s, SCENE_H * s);
+
+    const things = [
+      ...this.trees.map((t) => ({ y: t.y, tree: t })),
+      ...[...this.walkers.values()].map((w) => ({ y: w.y, walker: w })),
+    ].sort((a, b) => a.y - b.y);
+
+    for (const th of things) {
+      if (th.tree) {
+        const t = th.tree;
+        ctx.drawImage(t.t.canvas, (t.x - t.t.w / 2) * s, (t.y - t.t.h) * s, t.t.w * s, t.t.h * s);
+        continue;
+      }
+      const w = th.walker;
+      const img = spriteImage(w.cls);
+      if (!img.complete) continue;
+      // Squash and stretch, anchored at the feet. Bouncy while walking, a
+      // slow gentle breath while standing still.
+      const amp = w.moving ? 0.11 : 0.035;
+      const k = Math.sin(w.phase);
+      const sy = 1 + amp * k;
+      const sx = 1 - amp * 0.7 * k;
+      const fx = Math.round(w.x * s), fy = Math.round(w.y * s);
+      // Shadow
+      ctx.fillStyle = 'rgba(20, 40, 18, 0.35)';
+      ctx.beginPath();
+      ctx.ellipse(fx, fy, 9 * s * sx, 2.5 * s, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.save();
+      ctx.translate(fx, fy);
+      ctx.scale(w.facing * sx * s, sy * s);
+      ctx.drawImage(img, -SPRITE / 2, -SPRITE + 1);
+      ctx.restore();
+    }
+  }
+
+  handleTap(ev) {
+    const rect = this.canvas.getBoundingClientRect();
+    const x = ((ev.clientX - rect.left) / rect.width) * this.W;
+    const y = ((ev.clientY - rect.top) / rect.height) * SCENE_H;
+    const hit = [...this.walkers.values()]
+      .sort((a, b) => b.y - a.y)
+      .find((w) => Math.abs(x - w.x) < 12 && y < w.y + 2 && y > w.y - 28);
+    if (hit && this.onTap) this.onTap(hit.id);
+  }
+}

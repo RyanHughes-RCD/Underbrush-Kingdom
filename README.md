@@ -28,6 +28,8 @@ A phone-first web game about a band of tiny heroes living in the underbrush. Col
 
 Fighters gain XP for every encounter their party wins, and level up over time.
 
+At the top of the Camp tab, any fighter not away on an expedition wanders a grassy clearing ringed by trees. They squish and stretch as they go. Tap one to open their details. The trees and grass are drawn in code, so there are no image files for them.
+
 ## Project layout
 
 ```
@@ -36,6 +38,7 @@ css/style.css         Styles (mobile-first, pixel-art friendly)
 js/data.js            All game data and balance numbers
 js/game.js            Pure game logic (no DOM), unit tested
 js/main.js            UI rendering and input
+js/scene.js           Camp scene: forest clearing where idle fighters wander
 sw.js                 Service worker for offline play / install
 manifest.webmanifest  PWA manifest ("Add to Home Screen")
 assets/sprites/       32×32 8-bit character sprites (10-colour palettes)
