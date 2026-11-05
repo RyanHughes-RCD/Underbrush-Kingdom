@@ -3,14 +3,14 @@
 
 import {
   CLASSES, CLASS_IDS, ITEMS, WEAPONS, WORKSHOPS, EXPEDITION_TYPES, REGIONS, SCRAPS, MATERIALS, RARITIES,
-  materialAt, SMELT_FALLOFF, MAX_BATCH, WEAPON_COST, ACCENT_WORD,
+  materialAt, SMELT_FALLOFF, SMELT_SHIFT, MAX_BATCH, WEAPON_COST, ACCENT_WORD, scrapAt,
   ENCOUNTER_MINUTES, MIN_ENCOUNTERS, MAX_ENCOUNTERS, MAX_PARTY,
   LURE_MINUTES, MAX_ROSTER,
 } from './data.js';
 import * as ST from './stats.js';
 import * as PK from './perks.js';
 
-export const SAVE_VERSION = 7;
+export const SAVE_VERSION = 8;
 const MINUTE = 60 * 1000;
 
 // Debug/testing: multiplies the speed of all timers. Set via ?speed=60.
@@ -247,7 +247,7 @@ export function startExpedition(state, typeId, regionId, partyIds, count, now = 
     let finds = success ? 1 + Math.floor(rng() * 3) + Math.floor(i / 3) + region.bonusFinds : (rng() < 0.5 ? 1 : 0);
     if (success && rng() < fx.party.finds) finds += 1; // Forager, Treasure Nose
     for (let f = 0; f < finds; f++) {
-      const item = pickWeighted(rng, region.loot);
+      const item = scrapAt(pickWeighted(rng, region.loot), pickWeighted(rng, region.rarity));
       loot[item] = (loot[item] || 0) + 1;
     }
     encounters.push({ name: tpl.name, demand: tpl.demand, difficulty, chance, success, loot });
@@ -300,7 +300,7 @@ export function claimExpedition(state, expeditionId, now = Date.now()) {
     xpGiven[id] = Math.floor(xp * (1 + (fx.perMember[i].xp || 0)));
     grantXp(state, getCreature(state, id), xpGiven[id], now);
   });
-  const lootText = Object.entries(loot).map(([k, q]) => `${q} ${ITEMS[k].name}${q > 1 ? 's' : ''}`).join(', ') || 'nothing';
+  const lootText = batchText(loot) || 'nothing';
   const early = done < e.encounters.length ? ' early' : '';
   addLog(state, `Party returned${early} from ${expeditionName(e.type, e.region)}: ${wins}/${done} encounters won, found ${lootText}.`, now);
   return { loot, wins, done, xp, xpGiven };
@@ -308,50 +308,67 @@ export function claimExpedition(state, expeditionId, now = Date.now()) {
 
 // ---------- Workshops (smelting scrap into materials) ----------
 
+const batchSize = (inputs) => Object.values(inputs || {}).reduce((n, q) => n + q, 0);
+export function batchText(inputs) {
+  return Object.entries(inputs).filter(([, q]) => q > 0).map(([id, q]) => `${q}× ${ITEMS[id].name}`).join(', ');
+}
+
 /**
- * Odds for each material a batch could become. `count` pieces of `scrapId`
- * are put in; their total value spreads the odds toward higher tiers, up to
- * the scrap's maxTier. Returns [{material, tier, p}] with p summing to 1.
+ * Odds for each material a batch could become. `inputs` is {scrapId: count}
+ * (one family, up to MAX_BATCH pieces). The batch's average value moves the
+ * likeliest tier up; the best maxTier among the pieces caps it.
+ * Returns [{material, tier, p}] with p summing to 1.
  */
-export function smeltOdds(scrapId, count) {
-  const sc = SCRAPS[scrapId];
-  const value = sc.value * count;
-  const spread = Math.sqrt(value) / SMELT_FALLOFF;
+export function smeltOdds(inputs) {
+  const pieces = Object.entries(inputs).filter(([, q]) => q > 0);
+  const n = batchSize(inputs);
+  if (!n) return [];
+  const family = SCRAPS[pieces[0][0]].family;
+  const value = pieces.reduce((v, [id, q]) => v + SCRAPS[id].value * q, 0);
+  const maxTier = Math.max(...pieces.map(([id]) => SCRAPS[id].maxTier));
+  const centre = (value / n - 1) * SMELT_SHIFT;
+  const spread = Math.sqrt(n) / SMELT_FALLOFF;
   const weights = [];
-  for (let t = 1; t <= sc.maxTier; t++) weights.push(Math.exp(-((t - 1) ** 2) / (2 * spread * spread)));
+  for (let t = 1; t <= maxTier; t++) weights.push(Math.exp(-((t - 1 - centre) ** 2) / (2 * spread * spread)));
   const total = weights.reduce((a, b) => a + b, 0);
-  return weights.map((w, i) => ({ material: materialAt(sc.family, i + 1), tier: i + 1, p: w / total }));
+  return weights.map((w, i) => ({ material: materialAt(family, i + 1), tier: i + 1, p: w / total }));
 }
 
 export function workshopJobs(state, workshopId) {
   return state.jobs.filter((j) => j.workshop === workshopId).sort((a, b) => a.endsAt - b.endsAt);
 }
 
-export function canSmelt(state, workshopId, count) {
+export function canSmelt(state, workshopId, inputs) {
   const w = WORKSHOPS[workshopId];
   if (!w) return 'Unknown workshop.';
-  if (!Number.isInteger(count) || count < 1) return 'Put in at least one piece.';
-  if (count > MAX_BATCH) return `A batch holds at most ${MAX_BATCH} pieces.`;
-  if ((state.inventory[w.input] || 0) < count) return `You only have ${state.inventory[w.input] || 0} ${ITEMS[w.input].name}s.`;
+  const n = batchSize(inputs);
+  if (n < 1) return 'Put in at least one piece.';
+  if (n > MAX_BATCH) return `A batch holds at most ${MAX_BATCH} pieces.`;
+  for (const [id, q] of Object.entries(inputs)) {
+    if (!Number.isInteger(q) || q < 0) return 'Bad batch.';
+    if (!SCRAPS[id] || SCRAPS[id].family !== w.family) return `${w.name} can't use ${ITEMS[id]?.name || id}.`;
+    if ((state.inventory[id] || 0) < q) return `You only have ${state.inventory[id] || 0} ${ITEMS[id].name}.`;
+  }
   return null;
 }
 
 /**
- * Puts `count` scrap into a workshop. The result is rolled now (seeded) and
- * revealed when the batch finishes. Batches in one workshop run in turn.
+ * Puts a batch of scrap into a workshop. The result is rolled now (seeded)
+ * and revealed when the batch finishes. Batches in one workshop run in turn.
  */
-export function startSmelting(state, workshopId, count, now = Date.now()) {
-  const err = canSmelt(state, workshopId, count);
+export function startSmelting(state, workshopId, inputs, now = Date.now()) {
+  const err = canSmelt(state, workshopId, inputs);
   if (err) throw new Error(err);
   const w = WORKSHOPS[workshopId];
-  state.inventory[w.input] -= count;
+  const clean = Object.fromEntries(Object.entries(inputs).filter(([, q]) => q > 0));
+  for (const [id, q] of Object.entries(clean)) state.inventory[id] -= q;
   const rng = mulberry32(nextSeed(state));
-  const odds = smeltOdds(w.input, count);
+  const odds = smeltOdds(clean);
   let r = rng(), result = odds[0].material;
   for (const o of odds) { r -= o.p; if (r < 0) { result = o.material; break; } }
   const queue = workshopJobs(state, workshopId);
   const start = Math.max(now, queue.length ? queue[queue.length - 1].endsAt : now);
-  const job = { id: newId(state, 'j'), workshop: workshopId, input: w.input, count, result, startsAt: start, endsAt: start + minutesToMs(w.minutes) };
+  const job = { id: newId(state, 'j'), workshop: workshopId, inputs: clean, count: batchSize(clean), result, startsAt: start, endsAt: start + minutesToMs(w.minutes) };
   state.jobs.push(job);
   return job;
 }
@@ -427,7 +444,7 @@ export function tick(state, now = Date.now()) {
     for (const j of finished.sort((a, b) => a.endsAt - b.endsAt)) {
       state.inventory[j.result] = (state.inventory[j.result] || 0) + 1;
       const mat = MATERIALS[j.result];
-      addLog(state, `${WORKSHOPS[j.workshop].name} turned ${j.count} ${ITEMS[j.input].name}${j.count > 1 ? 's' : ''} into ${mat.name} (tier ${mat.tier})!`, now);
+      addLog(state, `${WORKSHOPS[j.workshop].name} turned ${batchText(j.inputs)} into ${mat.name} (tier ${mat.tier})!`, now);
       state.recent = [{ material: j.result, t: now }, ...(state.recent || [])].slice(0, 5);
       if (!state.discovered.includes(j.result)) state.discovered.push(j.result);
     }
@@ -452,7 +469,7 @@ const SAVE_KEY = 'underbrush-kingdom-save';
 
 export function serialize(state) { return JSON.stringify(state); }
 
-/** Upgrades older saves. v1 had generic wood/metal/gem and weapon tiers 1-3; v2 had one weapon type per class; v3 weapons had one material; v4 expeditions were zones, now type + region; v5 creatures had no traits; v6 creatures had no perks. */
+/** Upgrades older saves. v1 had generic wood/metal/gem and weapon tiers 1-3; v2 had one weapon type per class; v3 weapons had one material; v4 expeditions were zones, now type + region; v5 creatures had no traits; v6 creatures had no perks; v7 had one scrap per family. */
 export function migrate(s) {
   if (s.version === 1) {
     const map = { wood: 'wood', metal: 'metal', gem: 'crystal' };
@@ -467,7 +484,7 @@ export function migrate(s) {
     }
     s.jobs = s.jobs.map((j) => {
       const ws = WORKSHOPS[j.workshop];
-      return { ...j, input: ws.input, count: 3, result: materialAt(ws.family, 1) };
+      return { ...j, input: { woodworker: 'twig', forge: 'bottlecap', enchanter: 'pebble' }[j.workshop], count: 3, result: materialAt(ws.family, 1) };
     });
     s.version = 2;
   }
@@ -501,6 +518,18 @@ export function migrate(s) {
       c.traits.perks = PK.rollPerks(rng, c.cls, 'common');
     }
     s.version = 7;
+  }
+  if (s.version === 7) {
+    // v7 had one scrap per family; pebbles became Broken Glass, and batches
+    // record their mix of scrap as `inputs`.
+    const rename = (id) => (id === 'pebble' ? 'broken_glass' : id);
+    if (s.inventory.pebble) s.inventory.broken_glass = (s.inventory.broken_glass || 0) + s.inventory.pebble;
+    delete s.inventory.pebble;
+    for (const j of s.jobs) if (!j.inputs) { j.inputs = { [rename(j.input)]: j.count }; delete j.input; }
+    for (const e of s.expeditions) for (const enc of e.encounters) {
+      enc.loot = Object.fromEntries(Object.entries(enc.loot).map(([k, q]) => [rename(k), q]));
+    }
+    s.version = 8;
   }
   return s;
 }

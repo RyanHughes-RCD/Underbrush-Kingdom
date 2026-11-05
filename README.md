@@ -22,19 +22,26 @@ A phone-first web game about a band of tiny heroes living in the underbrush. Col
      | Excursion | A mixed party |
    - The **region** decides how hard it is and how much you bring back. Harder regions find more scrap per win and give more XP:
 
-     | Region | Difficulty | Mostly finds | Extra finds per win | XP per win |
-     |---|---|---|---|---|
-     | Windy Meadow | 1 | A bit of everything | — | 1 |
-     | Tangled Thicket | 2 | Twigs | +1 | 1 |
-     | Glimmer Creek | 3 | Pebbles | +2 | 2 |
-     | Old Gutter Drain | 4 | Bottle caps | +3 | 3 |
+     | Region | Difficulty | Mostly finds | Rarest scrap | Uncommon or better | Extra finds per win | XP per win |
+     |---|---|---|---|---|---|---|
+     | Windy Meadow | 1 | A bit of everything | Rare | 20% | — | 1 |
+     | Tangled Thicket | 2 | Wood | Epic | 40% | +1 | 1 |
+     | Glimmer Creek | 3 | Crystal | Legendary | 58% | +2 | 2 |
+     | Old Gutter Drain | 4 | Metal | Divine | 72% | +3 | 3 |
 3. **Duration = encounters.** Choose 1–12 encounters, 10 minutes each (6 encounters = 1 hour). Results are revealed one encounter at a time. Later encounters are harder but give more. You can recall a party early and keep what they've already found.
-4. **Workshops.** Put scrap into a workshop to smelt it into one material. Each family has 10 tiers:
-   - Woodworker's Cabin: twigs → **woods** (Pine, Oak, Ashwood … Godwood)
-   - The Forge: bottle caps → **metals** (Iron, Copper, Bronze … Godsbane)
-   - Enchanter's Hut: pebbles → **crystals** (Quartz, Amethyst, Garnet … Prismheart)
+4. **Scrap and workshops.** Expeditions bring home scrap in seven rarities per family:
 
-   A batch holds up to 3 pieces of scrap. Each scrap has a **value**, and the batch's total value sets the odds. Tier 1 is always the likeliest, and more value makes rarer tiers likelier. Each scrap also has a highest tier it can ever reach; bottle caps, twigs and pebbles top out at tier 4. With 3 bottle caps the odds are about 50% Iron, 35% Copper, 12% Bronze and 2% Steel. The workshop shows the odds before you commit, and the result is revealed when the batch finishes. Materials you haven't found yet show as "?".
+   | Rarity | Metal | Wood | Crystal | Value | Best tier |
+   |---|---|---|---|---|---|
+   | Common | Bottle Cap | Stray Twig | Broken Glass | 1 | 4 |
+   | Uncommon | Screw | Acorn Cap | Sea Glass | 2 | 5 |
+   | Rare | Old Key | Birch Bark | Quartz Fragment | 3 | 6 |
+   | Epic | Clockwork Gear | Carved Wooden Bead | Polished Gemstone | 4 | 7 |
+   | Legendary | Silver Charm | Ancient Root | Opal Shard | 5 | 8 |
+   | Mythic | Meteorite Fragment | Moonwood Branch | Meteoric Crystal | 6 | 9 |
+   | Divine | Ancient Crown Fragment | Worldtree Fragment | Starheart Fragment | 7 | 10 |
+
+   Put up to 3 pieces of a family's scrap (mixed freely) into its workshop to smelt one material: the Woodworker's Cabin makes **woods** (Pine … Godwood), the Forge **metals** (Iron … Godsbane), the Enchanter's Hut **crystals** (Quartz … Prismheart). The batch's average value moves the likeliest tier up, and its best piece sets the highest tier it can reach. A full batch of each rarity centres on roughly: Common tier 1 (3 bottle caps: ~50% Iron, 35% Copper, 12% Bronze, 2% Steel), Uncommon 2, Rare 3–4, Epic 5, Legendary 6, Mythic 7, Divine 8–9 (16% tier 10). The workshop shows the odds before you commit; the result is revealed when the batch finishes; materials you haven't found yet show as "?".
 5. **Craft weapons.** Each class has two weapon types: Archer Lizards use the **Longbow** or **Recurve Bow**, Beetle Knights the **Sword** or **Mace**, and Wizard Mice the **Staff** or **Tome**. Each weapon is made of two materials, a **main material** (2 needed) and **fittings** (1 needed) from a second family:
 
    | Class | Main material | Fittings | Example |

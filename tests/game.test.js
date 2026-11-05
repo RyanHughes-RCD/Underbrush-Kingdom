@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as G from '../js/game.js';
-import { ENCOUNTER_MINUTES, WORKSHOPS, LURE_MINUTES, REGIONS } from '../js/data.js';
+import { ENCOUNTER_MINUTES, WORKSHOPS, LURE_MINUTES, REGIONS, SCRAPS, SCRAP_RARITY_IDS, scrapsOf } from '../js/data.js';
 
 const MIN = 60 * 1000;
 
@@ -35,7 +35,7 @@ test('claiming adds loot and frees the party; early return keeps partial loot', 
   const expected = e.encounters.slice(0, 2).reduce((n, enc) => n + Object.values(enc.loot).reduce((a, b) => a + b, 0), 0);
   const r = G.claimExpedition(s, e.id, 2 * ENCOUNTER_MINUTES * MIN);
   assert.equal(r.done, 2);
-  const total = s.inventory.twig + s.inventory.bottlecap + s.inventory.pebble;
+  const total = Object.keys(SCRAPS).reduce((n, id) => n + (s.inventory[id] || 0), 0);
   assert.equal(total, expected);
   assert.equal(s.expeditions.length, 0);
   assert.ok(!G.isBusy(s, ids[0]));
@@ -91,14 +91,32 @@ test('version 4 saves: zone expeditions become a type plus a region', () => {
 });
 
 test('smelting odds: 3 bottle caps give about 50% iron, never above steel', () => {
-  const odds = G.smeltOdds('bottlecap', 3);
+  const odds = G.smeltOdds({ bottlecap: 3 });
   assert.deepEqual(odds.map((o) => o.material), ['iron', 'copper', 'bronze', 'steel']);
   assert.ok(Math.abs(odds[0].p - 0.5) < 0.02, `iron ${odds[0].p}`);
   assert.ok(Math.abs(odds.reduce((a, o) => a + o.p, 0) - 1) < 1e-9);
   assert.ok(odds[3].p < 0.05, `steel should be very rare (${odds[3].p})`);
-  // More value in, better odds of higher tiers.
-  assert.ok(G.smeltOdds('bottlecap', 3)[3].p > G.smeltOdds('bottlecap', 2)[3].p);
-  assert.ok(G.smeltOdds('bottlecap', 1)[0].p > 0.7);
+  assert.ok(G.smeltOdds({ bottlecap: 1 })[0].p > 0.7);
+});
+
+test('rarer scrap pushes the odds up the tiers and raises the cap', () => {
+  const likeliest = (inputs) => G.smeltOdds(inputs).reduce((best, o) => (o.p > best.p ? o : best)).tier;
+  const tiers = scrapsOf('metal').map((id) => likeliest({ [id]: 3 }));
+  for (let i = 1; i < tiers.length; i++) assert.ok(tiers[i] >= tiers[i - 1], `rarity ${i}: ${tiers}`);
+  assert.equal(tiers[0], 1);
+  assert.ok(tiers[6] >= 8, `3 divine scrap should centre high (${tiers[6]})`);
+  assert.equal(G.smeltOdds({ ancient_crown_fragment: 3 }).length, 10);
+  assert.equal(G.smeltOdds({ screw: 3 }).length, SCRAPS.screw.maxTier);
+  // Mixing: one rare piece lifts a batch of commons a little.
+  assert.ok(G.smeltOdds({ bottlecap: 2, old_key: 1 })[0].p < G.smeltOdds({ bottlecap: 3 })[0].p);
+});
+
+test('every family has seven scrap rarities', () => {
+  for (const fam of ['metal', 'wood', 'crystal']) {
+    const ids = scrapsOf(fam);
+    assert.equal(ids.length, 7);
+    ids.forEach((id, i) => { assert.equal(SCRAPS[id].rarity, SCRAP_RARITY_IDS[i]); assert.equal(SCRAPS[id].family, fam); });
+  }
 });
 
 test('smelting results match the odds over many batches', () => {
@@ -106,27 +124,56 @@ test('smelting results match the odds over many batches', () => {
   const counts = {};
   for (let i = 0; i < 4000; i++) {
     s.inventory.bottlecap = 3;
-    const j = G.startSmelting(s, 'forge', 3, 0);
+    const j = G.startSmelting(s, 'forge', { bottlecap: 3 }, 0);
     counts[j.result] = (counts[j.result] || 0) + 1;
   }
   assert.ok(Math.abs(counts.iron / 4000 - 0.5) < 0.04, JSON.stringify(counts));
   assert.ok(!counts.silversteel);
 });
 
-test('workshop smelts over time, batches queue in turn', () => {
+test('workshop smelts mixed batches over time, batches queue in turn', () => {
   const s = G.newGame(3);
-  s.inventory.twig = 5;
-  const a = G.startSmelting(s, 'woodworker', 3, 0);
-  const b = G.startSmelting(s, 'woodworker', 2, 0);
+  s.inventory.twig = 4; s.inventory.birch_bark = 1;
+  const a = G.startSmelting(s, 'woodworker', { twig: 2, birch_bark: 1 }, 0);
+  const b = G.startSmelting(s, 'woodworker', { twig: 2 }, 0);
   assert.equal(s.inventory.twig, 0);
+  assert.equal(s.inventory.birch_bark, 0);
   assert.equal(b.startsAt, a.endsAt);
-  G.tick(s, WORKSHOPS.woodworker.minutes * MIN);
-  assert.equal(s.inventory[a.result], 1 + (a.result === b.result ? 0 : 0));
   G.tick(s, 2 * WORKSHOPS.woodworker.minutes * MIN);
-  assert.equal(s.inventory.pine + s.inventory.oak + s.inventory.ashwood + s.inventory.ironwood, 2);
-  assert.throws(() => G.startSmelting(s, 'woodworker', 1, 0));
-  s.inventory.twig = 50;
-  assert.throws(() => G.startSmelting(s, 'woodworker', 4, 0), /at most 3/);
+  const woods = ['pine', 'oak', 'ashwood', 'ironwood', 'heartwood', 'thornwood'].reduce((n, m) => n + (s.inventory[m] || 0), 0);
+  assert.equal(woods, 2);
+  s.inventory.twig = 50; s.inventory.bottlecap = 5;
+  assert.throws(() => G.startSmelting(s, 'woodworker', { twig: 4 }, 0), /at most 3/);
+  assert.throws(() => G.startSmelting(s, 'woodworker', { twig: 1, bottlecap: 1 }, 0), /can't use/);
+  assert.throws(() => G.startSmelting(s, 'woodworker', { acorn_cap: 1 }, 0), /only have/);
+});
+
+test('harder regions find rarer scrap', () => {
+  const s = G.newGame(14);
+  const ids = s.creatures.map((c) => c.id);
+  const rareShare = (region) => {
+    let rare = 0, all = 0;
+    for (let i = 0; i < 40; i++) {
+      for (const c of s.creatures) c.traits.perks = [];
+      const e = G.startExpedition(s, 'excursion', region, ids, 6, 0);
+      for (const enc of e.encounters) for (const [k, q] of Object.entries(enc.loot)) { all += q; if (SCRAPS[k].rarity !== 'common') rare += q; }
+      s.expeditions = [];
+    }
+    return rare / all;
+  };
+  assert.ok(rareShare('gutter') > rareShare('meadow') + 0.2);
+});
+
+test('version 7 saves: pebbles become broken glass', () => {
+  const v7 = { version: 7, seed: 1, nextId: 3, creatures: [], lures: [], log: [], discovered: [], weapons: [],
+    inventory: { pebble: 4, twig: 1 },
+    jobs: [{ id: 'j1', workshop: 'enchanter', input: 'pebble', count: 3, result: 'quartz', startsAt: 0, endsAt: 10 }],
+    expeditions: [{ id: 'e1', type: 'research', region: 'creek', partyIds: [], startedAt: 0, encounterMs: 1, encounters: [{ name: 'x', demand: 'mage', success: true, loot: { pebble: 2 } }] }] };
+  const s = G.deserialize(JSON.stringify(v7));
+  assert.equal(s.inventory.broken_glass, 4);
+  assert.equal(s.inventory.pebble, undefined);
+  assert.deepEqual(s.jobs[0].inputs, { broken_glass: 3 });
+  assert.deepEqual(s.expeditions[0].encounters[0].loot, { broken_glass: 2 });
 });
 
 test('craft, equip and lure', () => {

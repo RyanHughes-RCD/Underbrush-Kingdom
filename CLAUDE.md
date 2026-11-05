@@ -4,7 +4,7 @@ Static web game with no build step (HTML, CSS and ES modules). `npm test` runs t
 
 ## Expeditions
 
-- An expedition is a party, a type (`EXPEDITION_TYPES` in `js/data.js`: scouting, skirmish, research, excursion; each has its own encounter list with a `demand` class) and a region (`REGIONS`: meadow, thicket, creek, gutter, easiest first; each sets `baseDifficulty`, `bonusFinds`, `xpPerWin` and `loot` weights), plus a number of encounters (10 minutes each).
+- An expedition is a party, a type (`EXPEDITION_TYPES` in `js/data.js`: scouting, skirmish, research, excursion; each has its own encounter list with a `demand` class) and a region (`REGIONS`: meadow, thicket, creek, gutter, easiest first; each sets `baseDifficulty`, `bonusFinds`, `xpPerWin`, `loot` family weights and `rarity` weights), plus a number of encounters (10 minutes each).
 - Encounter difficulty = region base + 1.5 × index. Odds and rewards are in `previewExpedition()` / `startExpedition()` in `js/game.js`. Saved expeditions store `type` and `region`.
 
 ## Stats
@@ -20,8 +20,10 @@ Static web game with no build step (HTML, CSS and ES modules). `npm test` runs t
 
 ## Materials and smelting
 
-- `js/data.js` holds `FAMILIES` (metal, wood, crystal; 10 tiers each), `SCRAPS` (each with `value` and `maxTier`), and the odds constants `SMELT_FALLOFF` and `MAX_BATCH` (3 pieces per batch). `smeltOdds()` in `js/game.js` computes the odds: the weight of tier t is exp(-(t-1)² / 2σ²), where σ = √(total value) / SMELT_FALLOFF.
-- Material icons are generated into `assets/items/materials/` by `tools/make_item_icons.py`, using each material's palette in `data.js`.
+- `js/data.js` holds `FAMILIES` (metal, wood, crystal; 10 material tiers each), `SCRAP_RARITIES` (common … divine: `value` 1-7, `maxTier` 4-10) and `SCRAPS` (7 per family, built from `SCRAP_LIST`; `scrapAt(family, rarity)` and `scrapsOf(family)` look them up), and the odds constants `SMELT_FALLOFF`, `SMELT_SHIFT` and `MAX_BATCH` (3 pieces per batch).
+- A smelting batch is `{scrapId: count}` (one family, mixed). `smeltOdds()` in `js/game.js`: the weight of tier t (up to the batch's best maxTier) is exp(-((t-1) - centre)² / 2σ²), with centre = (average value − 1) × SMELT_SHIFT and σ = √pieces / SMELT_FALLOFF. Jobs store `inputs`.
+- Regions roll each scrap's family from `loot` and its rarity from `rarity` weights.
+- Material icons are generated into `assets/items/materials/` by `tools/make_item_icons.py`, using each material's palette in `data.js`. Scrap icons are pixel maps in `tools/scrap_icons.py` (common scrap and weapon icons are in `make_item_icons.py`).
 - Saves are versioned; `migrate()` in `js/game.js` upgrades old ones. Bump `SAVE_VERSION` and add a migration step whenever the save shape changes.
 
 ## Character art

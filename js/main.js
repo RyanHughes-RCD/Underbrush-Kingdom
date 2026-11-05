@@ -1,7 +1,7 @@
 // UI layer: renders state into the DOM and wires up taps.
 import {
   CLASSES, CLASS_IDS, ITEMS, WEAPONS, WORKSHOPS, EXPEDITION_TYPES, EXPEDITION_TYPE_IDS, REGIONS, REGION_IDS,
-  SCRAPS, MATERIALS, FAMILIES, MAX_BATCH, WEAPON_COST, TIER_NAMES, STATS, STAT_IDS, ACCENT_WORD, PERKS, RARITIES, RARITY_IDS,
+  SCRAPS, SCRAP_RARITIES, scrapsOf, MATERIALS, FAMILIES, MAX_BATCH, WEAPON_COST, TIER_NAMES, STATS, STAT_IDS, ACCENT_WORD, PERKS, RARITIES, RARITY_IDS,
   ENCOUNTER_MINUTES, MIN_ENCOUNTERS, MAX_ENCOUNTERS, MAX_PARTY, LURE_MINUTES,
 } from './data.js';
 import * as G from './game.js';
@@ -21,7 +21,7 @@ const ui = {
   partyPicked: false,    // whether the party has been filled in yet
   party: [],             // creature ids chosen for it
   count: 3,              // encounters chosen
-  smelt: { woodworker: 3, forge: 3, enchanter: 3 }, // pieces per batch
+  smelt: {},             // workshop id -> {scrapId: count} batch being filled
   craft: {},             // workshop id -> {type, material, accent} being planned
 };
 
@@ -65,9 +65,12 @@ function toast(msg) {
 // ---------- Satchel ----------
 
 function renderSatchel() {
-  const scraps = Object.keys(SCRAPS).map((k) => {
-    const q = state.inventory[k] || 0;
-    return `<span class="it ${q ? '' : 'zero'}" title="${esc(ITEMS[k].name)}">${icon(k)}${q}</span>`;
+  // Scrap totals per family, shown with the family's common scrap icon.
+  const scraps = Object.values(FAMILIES).map((f) => {
+    const ids = scrapsOf(f.id);
+    const q = ids.reduce((n, id) => n + (state.inventory[id] || 0), 0);
+    const rare = ids.slice(1).reduce((n, id) => n + (state.inventory[id] || 0), 0);
+    return `<span class="it ${q ? '' : 'zero'}" title="${esc(f.name)} scrap${rare ? `, ${rare} uncommon or better` : ''}">${icon(ids[0])}${q}${rare ? '<sup>★</sup>' : ''}</span>`;
   });
   const fams = Object.values(FAMILIES).map((f) => {
     const q = f.list.reduce((n, m) => n + (state.inventory[m.id] || 0), 0);
@@ -218,7 +221,14 @@ function demandIcons(type) {
     .map(([cls, n]) => `<span class="row small" style="gap:0">${sprite(cls, 32)}×${n}</span>`).join('');
 }
 const pips = (n, max = 4) => `<span class="pips" title="Difficulty ${n} of ${max}">${Array.from({ length: max }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</span>`;
-const lootIcons = (loot) => Object.entries(loot).sort((a, b) => b[1] - a[1]).map(([k, w]) => `${icon(k)}${w >= 5 ? '' : w <= 1 ? '<span class="muted">(rare)</span>' : ''}`).join(' ');
+const lootIcons = (loot) => Object.entries(loot).sort((a, b) => b[1] - a[1]).map(([fam, w]) => `${icon(scrapsOf(fam)[0])}${w >= 5 ? '' : w <= 1 ? '<span class="muted">(rare)</span>' : ''}`).join(' ');
+/** "Up to Epic · 13% uncommon or better"-style summary of a region's scrap rarity table. */
+function rarityLine(rarity) {
+  const ids = Object.keys(rarity), total = Object.values(rarity).reduce((a, b) => a + b, 0);
+  const best = ids[ids.length - 1];
+  const better = Math.round(((total - (rarity.common || 0)) / total) * 100);
+  return `<span class="rtag r-${best}">up to ${SCRAP_RARITIES[best].name}</span> <span class="muted">${better}% uncommon or better</span>`;
+}
 
 function renderPlanner() {
   if (!ui.partyPicked) { ui.party = state.creatures.filter((c) => !G.isBusy(state, c.id)).slice(0, MAX_PARTY).map((c) => c.id); ui.partyPicked = true; }
@@ -238,7 +248,8 @@ function renderPlanner() {
           <button class="opt region ${ui.region === id ? 'on' : ''}" data-action="pick-region" data-id="${id}">
             <span class="row"><b class="grow">${esc(r.name)}</b>${pips(r.level)}</span>
             <span class="small muted">${esc(r.blurb)}</span>
-            <span class="small loot-icons">Finds ${lootIcons(r.loot)} <span class="muted">· ${r.bonusFinds ? `+${r.bonusFinds} per win` : 'standard'} · ${r.xpPerWin} XP per win</span></span></button>`; }).join('')}</div>`)}
+            <span class="small loot-icons">Finds ${lootIcons(r.loot)} ${rarityLine(r.rarity)}</span>
+            <span class="small muted">${r.bonusFinds ? `+${r.bonusFinds} scrap per win` : 'Standard finds'} · ${r.xpPerWin} XP per win</span></button>`; }).join('')}</div>`)}
       ${step(3, `Party <span class="muted">(up to ${MAX_PARTY})</span>`, ui.party.length, `
         <div class="picker">
           ${state.creatures.map((c) => {
@@ -313,16 +324,21 @@ const pct = (p) => (p >= 0.995 ? '>99%' : p < 0.005 ? '<1%' : `${Math.round(p * 
 function renderWorkshops() {
   return `
     <h2>Workshops</h2>
-    <p class="hint">Put scrap into a workshop to smelt it. The more you put in, the better your odds of a rare material. Each batch makes one material.</p>
+    <p class="hint">Put up to ${MAX_BATCH} pieces of scrap into a workshop to smelt them into one material. Rarer scrap gives better odds of a rare material.</p>
     ${Object.values(WORKSHOPS).map((ws) => {
-      const sc = SCRAPS[ws.input];
-      const have = state.inventory[ws.input] || 0;
-      const n = Math.max(1, Math.min(ui.smelt[ws.id], MAX_BATCH));
-      const odds = G.smeltOdds(ws.input, n);
-      const jobs = G.workshopJobs(state, ws.id);
       const fam = FAMILIES[ws.family];
+      const ids = scrapsOf(ws.family);
+      const have = (id) => state.inventory[id] || 0;
+      // First visit: start the batch with up to 3 common scrap.
+      if (!ui.smelt[ws.id]) ui.smelt[ws.id] = have(ids[0]) ? { [ids[0]]: Math.min(MAX_BATCH, have(ids[0])) } : {};
+      const batch = ui.smelt[ws.id];
+      for (const id of Object.keys(batch)) batch[id] = Math.min(batch[id], have(id)); // stock may have dropped
+      const n = Object.values(batch).reduce((a, b) => a + b, 0);
+      const odds = n ? G.smeltOdds(batch) : [];
+      const value = Object.entries(batch).reduce((v, [id, q]) => v + SCRAPS[id].value * q, 0);
+      const slots = Object.entries(batch).flatMap(([id, q]) => Array(q).fill(id));
+      const jobs = G.workshopJobs(state, ws.id);
       const types = CLASSES[ws.cls].weapons.map((t) => WEAPONS[t]);
-      const owned = fam.list.filter((m) => state.inventory[m.id] > 0);
       const seen = new Set(state.discovered || []);
       return `
       <div class="card">
@@ -330,22 +346,23 @@ function renderWorkshops() {
         <p>${esc(ws.blurb)}</p>
 
         <div class="ws-section">
-          <div class="row">
-            <div class="grow small"><b>Smelt ${esc(sc.name)}s</b><br><span class="muted">You have ${have} · value ${sc.value} each · batch value ${sc.value * n}</span></div>
-            <div class="stepper">
-              <button class="btn ghost sm" data-action="smelt-n" data-id="${ws.id}" data-d="-1" ${n <= 1 ? 'disabled' : ''}>−</button>
-              <span class="val">${n}</span>
-              <button class="btn ghost sm" data-action="smelt-n" data-id="${ws.id}" data-d="1" ${n >= MAX_BATCH ? 'disabled' : ''}>+</button>
-            </div>
-          </div>
-          <ul class="odds-list">
-            ${odds.map((o) => `<li>${seen.has(o.material) ? icon(o.material) : '<span class="unknown">?</span>'}
+          <div class="small"><b>Smelt</b> <span class="muted">· up to ${MAX_BATCH} pieces, mixed freely. Rarer scrap pushes the odds up the tiers.</span></div>
+          <div class="scrap-shelf">${ids.map((id) => { const sc = SCRAPS[id], q = have(id), used = batch[id] || 0;
+            return `<button class="scrap ${q ? '' : 'none'}" data-action="smelt-add" data-id="${ws.id}" data-scrap="${id}" ${q - used <= 0 || n >= MAX_BATCH ? 'disabled' : ''} title="${esc(sc.name)} · ${SCRAP_RARITIES[sc.rarity].name} · value ${sc.value} · up to tier ${sc.maxTier}">
+              ${icon(id)}<span class="sname2">${esc(sc.name)}</span><span class="rtag r-${sc.rarity}">${SCRAP_RARITIES[sc.rarity].name}</span><i>${q - used}/${q}</i></button>`; }).join('')}</div>
+          <div class="tray">${Array.from({ length: MAX_BATCH }, (_, i) => slots[i]
+            ? `<button class="slot full" data-action="smelt-remove" data-id="${ws.id}" data-scrap="${slots[i]}" title="Take out ${esc(SCRAPS[slots[i]].name)}">${icon(slots[i])}</button>`
+            : '<span class="slot"></span>').join('')}
+            <span class="small muted grow">${n ? `Value ${value} · ${n}/${MAX_BATCH} pieces` : 'Tap scrap above to add it'}</span>
+            ${n ? `<button class="btn ghost sm" data-action="smelt-clear" data-id="${ws.id}">Clear</button>` : ''}</div>
+          ${n ? `<ul class="odds-list">
+            ${odds.filter((o) => o.p >= 0.005).map((o) => `<li>${seen.has(o.material) ? icon(o.material) : '<span class="unknown">?</span>'}
               <span class="grow">${seen.has(o.material) ? esc(MATERIALS[o.material].name) : `Tier ${o.tier} ${fam.name.toLowerCase().slice(0, -1)}`}</span>
               <span class="obar"><i style="width:${Math.max(2, o.p * 100)}%"></i></span><span class="pct">${pct(o.p)}</span></li>`).join('')}
-          </ul>
-          <button class="btn block" data-action="smelt" data-id="${ws.id}" data-n="${n}" ${have < n ? 'disabled' : ''}>
-            Smelt ${n} ${esc(sc.name)}${n > 1 ? 's' : ''} <span class="muted-inv">(${fmtMinutes(ws.minutes)})</span></button>
-          ${jobs.length ? `<ul class="jobs">${jobs.map((j, i) => `<li><span class="unknown">?</span><span class="grow">${j.count} ${esc(ITEMS[j.input].name)}${j.count > 1 ? 's' : ''}</span>
+          </ul>` : ''}
+          <button class="btn block" data-action="smelt" data-id="${ws.id}" ${n ? '' : 'disabled'}>
+            ${n ? `Smelt ${esc(G.batchText(batch))}` : 'Smelt'} <span class="muted-inv">(${fmtMinutes(ws.minutes)})</span></button>
+          ${jobs.length ? `<ul class="jobs">${jobs.map((j, i) => `<li><span class="unknown">?</span><span class="grow">${esc(G.batchText(j.inputs))}</span>
             <span class="muted">${i === 0 || j.startsAt <= Date.now() ? `ready in ${countdown(j.endsAt)}` : `queued · ${countdown(j.endsAt)}`}</span></li>`).join('')}</ul>` : ''}
         </div>
 
@@ -501,8 +518,10 @@ document.addEventListener('click', (ev) => {
     case 'recall':
       if (confirm('Recall this party now? They keep loot from finished encounters only.')) act(() => G.claimExpedition(state, id));
       break;
-    case 'smelt-n': ui.smelt[id] = Math.max(1, Math.min(MAX_BATCH, ui.smelt[id] + Number(el.dataset.d))); render(); break;
-    case 'smelt': act(() => G.startSmelting(state, id, Number(el.dataset.n))); break;
+    case 'smelt-add': { const b = ui.smelt[id]; b[el.dataset.scrap] = (b[el.dataset.scrap] || 0) + 1; render(); break; }
+    case 'smelt-remove': { const b = ui.smelt[id]; b[el.dataset.scrap] -= 1; if (b[el.dataset.scrap] <= 0) delete b[el.dataset.scrap]; render(); break; }
+    case 'smelt-clear': ui.smelt[id] = {}; render(); break;
+    case 'smelt': act(() => { G.startSmelting(state, id, ui.smelt[id]); delete ui.smelt[id]; }); break;
     case 'material': openMaterial(id); break;
     case 'plan-craft': ui.craft[id] = { ...ui.craft[id], [el.dataset.role]: el.dataset.value }; render(); break;
     case 'craft': act(() => { const p = ui.craft[id]; const w = G.craftWeapon(state, p.type, p.material, p.accent); toast(`Crafted ${G.withArticle(G.weaponName(w))}!`); }); break;

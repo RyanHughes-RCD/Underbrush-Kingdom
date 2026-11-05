@@ -135,13 +135,39 @@ for (const fam of Object.values(FAMILIES)) {
 export const materialAt = (family, tier) => FAMILIES[family].list[tier - 1].id;
 
 // ---------- Scrap ----------
-// What expeditions bring home. `value` is how much each piece adds to a
-// smelting batch; `maxTier` is the best material that scrap can ever become.
-export const SCRAPS = {
-  twig:      { id: 'twig',      name: 'Stray Twig', family: 'wood',    value: 1, maxTier: 4, icon: 'assets/items/twig.png' },
-  bottlecap: { id: 'bottlecap', name: 'Bottle Cap', family: 'metal',   value: 1, maxTier: 4, icon: 'assets/items/bottlecap.png' },
-  pebble:    { id: 'pebble',    name: 'Pebble',     family: 'crystal', value: 1, maxTier: 4, icon: 'assets/items/pebble.png' },
+// What expeditions bring home. Each family has seven scrap rarities. A
+// scrap's `value` (its rarity rank, 1-7) shifts a smelting batch toward
+// higher tiers, and `maxTier` is the best material it can become.
+export const SCRAP_RARITIES = {
+  common:    { id: 'common',    name: 'Common',    value: 1, maxTier: 4 },
+  uncommon:  { id: 'uncommon',  name: 'Uncommon',  value: 2, maxTier: 5 },
+  rare:      { id: 'rare',      name: 'Rare',      value: 3, maxTier: 6 },
+  epic:      { id: 'epic',      name: 'Epic',      value: 4, maxTier: 7 },
+  legendary: { id: 'legendary', name: 'Legendary', value: 5, maxTier: 8 },
+  mythic:    { id: 'mythic',    name: 'Mythic',    value: 6, maxTier: 9 },
+  divine:    { id: 'divine',    name: 'Divine',    value: 7, maxTier: 10 },
 };
+export const SCRAP_RARITY_IDS = Object.keys(SCRAP_RARITIES);
+
+const SCRAP_LIST = {
+  metal: ['bottlecap:Bottle Cap', 'screw:Screw', 'old_key:Old Key', 'clockwork_gear:Clockwork Gear',
+    'silver_charm:Silver Charm', 'meteorite_fragment:Meteorite Fragment', 'ancient_crown_fragment:Ancient Crown Fragment'],
+  wood: ['twig:Stray Twig', 'acorn_cap:Acorn Cap', 'birch_bark:Birch Bark', 'carved_wooden_bead:Carved Wooden Bead',
+    'ancient_root:Ancient Root', 'moonwood_branch:Moonwood Branch', 'worldtree_fragment:Worldtree Fragment'],
+  crystal: ['broken_glass:Broken Glass', 'sea_glass:Sea Glass', 'quartz_fragment:Quartz Fragment', 'polished_gemstone:Polished Gemstone',
+    'opal_shard:Opal Shard', 'meteoric_crystal:Meteoric Crystal', 'starheart_fragment:Starheart Fragment'],
+};
+export const SCRAPS = {};
+for (const [family, list] of Object.entries(SCRAP_LIST)) {
+  list.forEach((entry, i) => {
+    const [id, name] = entry.split(':');
+    const r = SCRAP_RARITIES[SCRAP_RARITY_IDS[i]];
+    SCRAPS[id] = { id, name, family, rarity: r.id, value: r.value, maxTier: r.maxTier, icon: `assets/items/${id}.png` };
+  });
+}
+/** The scrap of a family at a rarity, e.g. scrapAt('metal', 'rare') = 'old_key'. */
+export const scrapAt = (family, rarity) => SCRAP_LIST[family][SCRAP_RARITY_IDS.indexOf(rarity)].split(':')[0];
+export const scrapsOf = (family) => SCRAP_LIST[family].map((e) => e.split(':')[0]);
 
 // Every inventory item, for names and icons.
 export const ITEMS = {};
@@ -149,12 +175,15 @@ for (const sc of Object.values(SCRAPS)) ITEMS[sc.id] = { ...sc, kind: 'scrap' };
 for (const mat of Object.values(MATERIALS)) ITEMS[mat.id] = { ...mat, kind: 'material', icon: `assets/items/materials/${mat.id}.png` };
 
 // ---------- Smelting odds ----------
-// The total value of a batch sets how widely the odds spread across tiers.
-// Tier 1 is always the likeliest; more value makes higher tiers likelier.
-// Weight of tier t (1-based) is exp(-(t-1)^2 / (2 * spread^2)) with
-// spread = sqrt(totalValue) / SMELT_FALLOFF. At 3 value that gives about
-// 50% tier 1, 35% tier 2, 12% tier 3 and 2% tier 4.
+// A batch is up to MAX_BATCH pieces of one family's scrap, mixed freely.
+// The weight of material tier t (up to the best maxTier in the batch) is
+//   exp(-((t - 1) - centre)^2 / (2 * spread^2))
+// where centre = (average value - 1) * SMELT_SHIFT and
+// spread = sqrt(pieces) / SMELT_FALLOFF.
+// So 3 bottle caps (value 1) centre on tier 1: about 50% Iron, 35% Copper,
+// 12% Bronze, 2% Steel. 3 Divine pieces (value 7) centre near tier 8.5.
 export const SMELT_FALLOFF = 1.46;
+export const SMELT_SHIFT = 1.25;
 export const MAX_BATCH = 3; // pieces per batch
 
 // ---------- Weapons ----------
@@ -195,19 +224,19 @@ export const WEAPONS = {
 export const GRADES = [[0.9, 'S'], [0.7, 'A'], [0.5, 'B'], [0.3, 'C'], [0.15, 'D'], [0, 'E']];
 export const weaponsFor = (cls) => Object.values(WEAPONS).filter((w) => w.cls === cls);
 
-// Each workshop smelts one kind of scrap into its family's materials.
+// Each workshop smelts its family's scrap into that family's materials.
 export const WORKSHOPS = {
   woodworker: {
-    id: 'woodworker', name: "Woodworker's Cabin", input: 'twig', family: 'wood', cls: 'archer', minutes: 5,
-    blurb: 'Twigs are whittled, bound and seasoned into timber.',
+    id: 'woodworker', name: "Woodworker's Cabin", family: 'wood', cls: 'archer', minutes: 5,
+    blurb: 'Twigs, bark and roots are whittled, bound and seasoned into timber.',
   },
   forge: {
-    id: 'forge', name: 'The Forge', input: 'bottlecap', family: 'metal', cls: 'knight', minutes: 5,
-    blurb: 'Bottle caps are melted down and hammered into metal.',
+    id: 'forge', name: 'The Forge', family: 'metal', cls: 'knight', minutes: 5,
+    blurb: 'Caps, screws and keys are melted down and hammered into metal.',
   },
   enchanter: {
-    id: 'enchanter', name: "Enchanter's Hut", input: 'pebble', family: 'crystal', cls: 'mage', minutes: 5,
-    blurb: 'Ordinary pebbles are coaxed into crystals.',
+    id: 'enchanter', name: "Enchanter's Hut", family: 'crystal', cls: 'mage', minutes: 5,
+    blurb: 'Glass and stray gems are coaxed into crystals.',
   },
 };
 
@@ -273,32 +302,37 @@ export const EXPEDITION_TYPE_IDS = Object.keys(EXPEDITION_TYPES);
 // The REGION sets the difficulty and the rewards. Encounter difficulty is
 // `baseDifficulty + 1.5 * encounterIndex`. Each won encounter finds
 // 1-3 scrap, plus one more for every 3 encounters deep, plus `bonusFinds`;
-// fighters gain `xpPerWin` XP per won encounter. `loot` weights decide which
-// scrap is found. Listed easiest first.
+// fighters gain `xpPerWin` XP per won encounter. Each piece found is rolled
+// twice: `loot` weights pick its family, `rarity` weights its rarity.
+// Listed easiest first.
 export const REGIONS = {
   meadow: {
     id: 'meadow', name: 'Windy Meadow', level: 1,
     blurb: 'Open grass and gentle breezes. A good place to start.',
     baseDifficulty: 5, bonusFinds: 0, xpPerWin: 1,
-    loot: { twig: 3, bottlecap: 3, pebble: 3 },
+    loot: { wood: 3, metal: 3, crystal: 3 },
+    rarity: { common: 80, uncommon: 17, rare: 3 },
   },
   thicket: {
     id: 'thicket', name: 'Tangled Thicket', level: 2,
     blurb: 'Brambles and fallen branches, thick with twigs.',
     baseDifficulty: 10, bonusFinds: 1, xpPerWin: 1,
-    loot: { twig: 6, bottlecap: 1, pebble: 1 },
+    loot: { wood: 6, metal: 1, crystal: 1 },
+    rarity: { common: 60, uncommon: 27, rare: 10, epic: 3 },
   },
   creek: {
     id: 'creek', name: 'Glimmer Creek', level: 3,
     blurb: 'Smooth stones and odd lights along the water.',
     baseDifficulty: 17, bonusFinds: 2, xpPerWin: 2,
-    loot: { pebble: 6, twig: 1, bottlecap: 1 },
+    loot: { crystal: 6, wood: 1, metal: 1 },
+    rarity: { common: 42, uncommon: 30, rare: 17, epic: 8, legendary: 3 },
   },
   gutter: {
     id: 'gutter', name: 'Old Gutter Drain', level: 4,
     blurb: 'Rusty, cramped and dangerous. Bottle caps everywhere.',
     baseDifficulty: 26, bonusFinds: 3, xpPerWin: 3,
-    loot: { bottlecap: 6, twig: 1, pebble: 1 },
+    loot: { metal: 6, wood: 1, crystal: 1 },
+    rarity: { common: 28, uncommon: 28, rare: 22, epic: 13, legendary: 6, mythic: 2.4, divine: 0.6 },
   },
 };
 export const REGION_IDS = Object.keys(REGIONS);

@@ -180,6 +180,12 @@ ICONS = {
   "................"],
 }
 
+import sys as _sys, os as _os
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+from scrap_icons import SCRAP_ICONS, EXTRA_PAL
+PAL.update(EXTRA_PAL)
+ICONS.update(SCRAP_ICONS)
+
 def render(rows, scale=1):
     im = Image.new('RGBA', (16, 16), (0, 0, 0, 0))
     for y, row in enumerate(rows):
