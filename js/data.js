@@ -303,6 +303,59 @@ export const REGIONS = {
 };
 export const REGION_IDS = Object.keys(REGIONS);
 
+// ---------- Rarity and perks ----------
+// Every creature rolls a rarity, which sets how many perk points it has.
+// A minor perk costs 1 point and a mid perk 2. `sets` lists the ways the
+// points can be spent, with their odds.
+export const RARITIES = {
+  common:   { id: 'common',   name: 'Common',   points: 1, sets: [[1, ['minor']]] },
+  uncommon: { id: 'uncommon', name: 'Uncommon', points: 2, sets: [[0.6, ['minor', 'minor']], [0.4, ['mid']]] },
+  rare:     { id: 'rare',     name: 'Rare',     points: 3, sets: [[0.4, ['minor', 'minor', 'minor']], [0.6, ['mid', 'minor']]] },
+  epic:     { id: 'epic',     name: 'Epic',     points: 4, sets: [[0.3, ['minor', 'minor', 'minor', 'minor']], [0.35, ['mid', 'minor', 'minor']], [0.35, ['mid', 'mid']]] },
+};
+export const RARITY_IDS = Object.keys(RARITIES);
+// Recruits from the Lure Post: the weapon's quality q sets the odds, as
+// weights common 1, uncommon 0.5q, rare 0.2q^2, epic 0.05q^3.
+export const RARITY_WEIGHTS = { common: () => 1, uncommon: (q) => 0.5 * q, rare: (q) => 0.2 * q * q, epic: (q) => 0.05 * q * q * q };
+
+// Perks help in battle (expedition encounters). Each one helps the creature
+// itself (`self`) and the rest of its party (`allies`):
+//   stat bonuses:  {dex: 0.08} = +8% Dexterity
+//   xp:            +% XP from expeditions
+// and some help the whole party at once (`party`):
+//   win:           + chance to win every encounter
+//   demand.<cls>:  + chance to win encounters that call for that class
+//   finds:         chance per won encounter to find one extra scrap
+// `favour` lists the classes more likely to roll it (3x as likely).
+export const PERKS = {
+  // Minor (1 point)
+  keen_eye:      { name: 'Keen Eye',       tier: 'minor', favour: ['archer'], self: { dex: 0.08 }, allies: { dex: 0.03 } },
+  strong_arm:    { name: 'Strong Arm',     tier: 'minor', favour: ['knight'], self: { str: 0.08 }, allies: { str: 0.03 } },
+  quick_wit:     { name: 'Quick Wit',      tier: 'minor', favour: ['mage'],   self: { int: 0.08 }, allies: { int: 0.03 } },
+  thick_skin:    { name: 'Thick Skin',     tier: 'minor', favour: ['knight'], self: { hp: 0.10 },  allies: { hp: 0.04 } },
+  stubborn:      { name: 'Stubborn',       tier: 'minor', favour: ['knight'], self: { mig: 0.08 }, allies: { mig: 0.03 } },
+  calm_spirit:   { name: 'Calm Spirit',    tier: 'minor', favour: ['mage'],   self: { spi: 0.08 }, allies: { spi: 0.03 } },
+  four_leaf:     { name: 'Four-Leaf',      tier: 'minor', favour: ['archer'], self: { lck: 0.08 }, allies: { lck: 0.03 } },
+  quick_learner: { name: 'Quick Learner',  tier: 'minor', favour: [],         self: { xp: 0.15 },  allies: { xp: 0.05 } },
+  forager:       { name: 'Forager',        tier: 'minor', favour: ['archer'], party: { finds: 0.10 } },
+  lookout:       { name: 'Lookout',        tier: 'minor', favour: [],         party: { win: 0.02 } },
+  // Mid (2 points)
+  eagle_eye:     { name: 'Eagle Eye',      tier: 'mid', favour: ['archer'], self: { dex: 0.18 }, allies: { dex: 0.08 } },
+  brawler:       { name: 'Brawler',        tier: 'mid', favour: ['knight'], self: { str: 0.18 }, allies: { str: 0.08 } },
+  scholar:       { name: 'Scholar',        tier: 'mid', favour: ['mage'],   self: { int: 0.18 }, allies: { int: 0.08 } },
+  ironhide:      { name: 'Ironhide',       tier: 'mid', favour: ['knight'], self: { hp: 0.22 },  allies: { hp: 0.10 } },
+  bulwark:       { name: 'Bulwark',        tier: 'mid', favour: ['knight'], self: { mig: 0.18 }, allies: { mig: 0.08 } },
+  serene:        { name: 'Serene',         tier: 'mid', favour: ['mage'],   self: { spi: 0.18 }, allies: { spi: 0.08 } },
+  charmed:       { name: "Fortune's Pet",  tier: 'mid', favour: ['archer'], self: { lck: 0.18 }, allies: { lck: 0.08 } },
+  mentor:        { name: 'Mentor',         tier: 'mid', favour: [],         self: { xp: 0.20 },  allies: { xp: 0.15 } },
+  treasure_nose: { name: 'Treasure Nose',  tier: 'mid', favour: [],         party: { finds: 0.25 } },
+  rallying_cry:  { name: 'Rallying Cry',   tier: 'mid', favour: ['knight'], party: { win: 0.05 } },
+  trailblazer:   { name: 'Trailblazer',    tier: 'mid', favour: ['archer'], self: { dex: 0.06 }, party: { demand: { archer: 0.08 } } },
+  shield_wall:   { name: 'Shield Wall',    tier: 'mid', favour: ['knight'], self: { mig: 0.06 }, party: { demand: { knight: 0.08 } } },
+  arcane_sight:  { name: 'Arcane Sight',   tier: 'mid', favour: ['mage'],   self: { int: 0.06 }, party: { demand: { mage: 0.08 } } },
+};
+export const PERK_IDS = Object.keys(PERKS);
+
 // Luring new recruits: leave a crafted weapon at the Lure Post and a new
 // creature of that weapon's class comes to claim it.
 export const LURE_MINUTES = 30;

@@ -1,13 +1,14 @@
 // UI layer: renders state into the DOM and wires up taps.
 import {
   CLASSES, CLASS_IDS, ITEMS, WEAPONS, WORKSHOPS, EXPEDITION_TYPES, EXPEDITION_TYPE_IDS, REGIONS, REGION_IDS,
-  SCRAPS, MATERIALS, FAMILIES, MAX_BATCH, WEAPON_COST, TIER_NAMES, STATS, STAT_IDS, ACCENT_WORD,
+  SCRAPS, MATERIALS, FAMILIES, MAX_BATCH, WEAPON_COST, TIER_NAMES, STATS, STAT_IDS, ACCENT_WORD, PERKS, RARITIES, RARITY_IDS,
   ENCOUNTER_MINUTES, MIN_ENCOUNTERS, MAX_ENCOUNTERS, MAX_PARTY, LURE_MINUTES,
 } from './data.js';
 import * as G from './game.js';
 import { CampScene } from './scene.js';
 import * as S from './sprites.js';
 import * as ST from './stats.js';
+import * as PK from './perks.js';
 
 const params = new URLSearchParams(location.search);
 if (params.has('speed')) G.setTimeScale(Number(params.get('speed')));
@@ -98,6 +99,26 @@ function statBlock(c) {
     <p class="hint small" style="margin:4px 0 0">Small numbers show what the next level adds. ▲/▼ mark stats that started above or below ${esc(CLASSES[c.cls].name)} average; bold green growth is a fast grower, grey a slow one.</p>`;
 }
 
+// ---------- Perks ----------
+
+const rarityTag = (c) => { const r = c.traits?.rarity || 'common'; return `<span class="rtag r-${r}">${RARITIES[r].name}</span>`; };
+function perkList(perks) {
+  if (!perks?.length) return '<p class="small muted">No perks.</p>';
+  return `<ul class="perks">${perks.map((id) => `<li><span class="ptier t-${PERKS[id].tier}">${PERKS[id].tier}</span><b>${esc(PERKS[id].name)}</b>
+    <span class="small">${PK.perkLines(id).map((l) => `<span class="pwho">${l.who}</span> ${esc(l.text)}`).join(' · ')}</span></li>`).join('')}</ul>`;
+}
+/** Short summary of what a party's perks add, for the expedition planner. */
+function partyPerkSummary(fx) {
+  const bits = [];
+  if (fx.party.win) bits.push(`+${Math.round(fx.party.win * 100)}% win chance`);
+  for (const [cls, v] of Object.entries(fx.party.demand)) bits.push(`+${Math.round(v * 100)}% on ${CLASSES[cls].name} encounters`);
+  if (fx.party.finds) bits.push(`+${Math.round(fx.party.finds * 100)}% extra-scrap chance`);
+  const allyStats = {};
+  fx.perMember.forEach((b) => { for (const [k, v] of Object.entries(b)) if (k !== 'xp') allyStats[k] = Math.max(allyStats[k] || 0, v); });
+  const statBits = Object.entries(allyStats).filter(([, v]) => v > 0).map(([k, v]) => `${STATS[k].short} up to +${Math.round(v * 100)}%`);
+  return [...bits, ...statBits].join(' · ');
+}
+
 // ---------- Camp ----------
 
 function creatureCard(c) {
@@ -107,7 +128,7 @@ function creatureCard(c) {
   return `
     <button class="creature ${busy ? 'busy' : ''}" data-action="creature" data-id="${c.id}">
       <div class="portrait">${creatureSprite(c, 128, 'sprite')}</div>
-      <div class="name">${esc(c.name)}</div>
+      <div class="name">${esc(c.name)}</div><div>${rarityTag(c)}</div>
       <div class="cls">${CLASSES[c.cls].name} · Lv ${c.level}</div>
       <div class="bar xp" title="XP"><i style="width:${xpPct}%"></i></div>
       <div class="row small"><span class="grow">Power ${G.creaturePower(state, c)}</span>${busy ? '<span class="tag away">Away</span>' : ''}</div>
@@ -141,14 +162,15 @@ function renderCamp() {
     <div class="roster">${state.creatures.map(creatureCard).join('')}</div>
 
     <h2>The Lure Post</h2>
-    <p class="hint">Leave a crafted weapon here and a new fighter of its class will come to claim it (${fmtMinutes(LURE_MINUTES)}).</p>
+    <p class="hint">Leave a crafted weapon here and a new fighter of its class will come to claim it (${fmtMinutes(LURE_MINUTES)}). Better weapons draw rarer fighters with more perks.</p>
     <div class="card">
       ${lures.length ? `<div class="weapon-list">${lures.map((l) => {
         const w = G.getWeapon(state, l.weaponId);
         return `<div class="weapon-row">${weaponIcon(w)}<div class="grow small">${esc(G.weaponName(w))}<br><span class="muted">A ${CLASSES[l.cls].name} approaches… ${countdown(l.endsAt)}</span></div></div>`;
       }).join('')}</div>` : ''}
       ${free.length ? `<div class="weapon-list" style="margin-top:${lures.length ? 10 : 0}px">${free.map((w) => `
-        <div class="weapon-row">${weaponIcon(w)}<div class="grow small">${esc(G.weaponName(w))}<br><span class="muted">${profileText(G.weaponProfile(w))}</span></div>
+        <div class="weapon-row">${weaponIcon(w)}<div class="grow small">${esc(G.weaponName(w))}<br><span class="muted">${profileText(G.weaponProfile(w))}</span>
+          <br><span class="odds-line">${Object.entries(PK.rarityOdds(G.weaponProfile(w).quality)).map(([r, p]) => `<span class="rtag r-${r}">${RARITIES[r].name} ${Math.round(p * 100)}%</span>`).join(' ')}</span></div>
           <button class="btn sm green" data-action="lure" data-id="${w.id}">Lure</button></div>`).join('')}</div>`
         : (lures.length ? '' : '<p>No spare weapons. Craft some at the Workshops.</p>')}
     </div>
@@ -172,6 +194,7 @@ function openCreature(id) {
     </div></div>
     <p class="small">${esc(CLASSES[c.cls].blurb)}</p>
     ${statBlock(c)}
+    <div class="ws-section"><div class="small"><b>Perks</b> <span class="muted">· ${RARITIES[c.traits?.rarity || 'common'].name}, ${RARITIES[c.traits?.rarity || 'common'].points} perk point${RARITIES[c.traits?.rarity || 'common'].points > 1 ? 's' : ''}. Stats above include its own perks; ally bonuses apply on expeditions.</span></div>${perkList(c.traits?.perks)}</div>
     <div class="ws-section">
       <div class="small"><b>Weapon:</b> ${w ? `${esc(G.weaponName(w))}<div class="ptags">${profileTags(G.weaponProfile(w))}</div>` : `Bare claws <span class="muted">(half ${{ archer: 'DEX', knight: 'STR', mage: 'INT' }[c.cls]})</span>`}</div>
       ${busy ? '<p class="small">Away on an expedition.</p>' : `
@@ -235,7 +258,8 @@ function renderPlanner() {
         </div>`)}
       <div class="plan-summary">
         ${prev ? `<b>${esc(G.expeditionName(ui.expType, ui.region))}</b> · ${fmtMinutes(ui.count * ENCOUNTER_MINUTES)}
-          <div class="small">Expected: <b>${prev.expectedWins.toFixed(1)} / ${ui.count}</b> wins (${Math.round(prev.avgChance * 100)}%) · about <b>${Math.round(prev.expectedFinds)}</b> scrap · <b>${Math.round(prev.expectedXp)}</b> XP each</div>`
+          <div class="small">Expected: <b>${prev.expectedWins.toFixed(1)} / ${ui.count}</b> wins (${Math.round(prev.avgChance * 100)}%) · about <b>${Math.round(prev.expectedFinds)}</b> scrap · <b>${Math.round(prev.expectedXp)}</b> XP each</div>
+          ${partyPerkSummary(prev.perks) ? `<div class="small"><b>Party perks:</b> ${esc(partyPerkSummary(prev.perks))}</div>` : ''}`
           : `<span class="small muted">${!ui.expType ? 'Choose a type' : !ui.region ? 'Choose a region' : 'Choose your party'} to see the odds.</span>`}
       </div>
       <button class="btn green block" data-action="start-exp" ${err ? 'disabled' : ''}>Set out!</button>

@@ -13,6 +13,11 @@ Static web game with no build step (HTML, CSS and ES modules). `npm test` runs t
 - Each creature has `traits` (rolled in `rollTraits()` in `js/game.js` when it's created): `base` and `growth` multipliers per stat (±20% / ±25%, see `rollStatTraits()` in `js/stats.js`) and a `tint` {h, s, l} for its colouring. Stats are derived from class, level and traits: stat = floor(base × baseMult + growth × growthMult × (level − 1)). Bodies list the palette indices that a tint recolours in `tints` (see `tintPalette()` in `js/sprites.js`).
 - Stats themselves aren't stored in saves, only the traits. In each class, one weapon has the higher base attack and the other scales better; `tests/stats.test.js` checks that they cross over.
 
+## Rarity and perks
+
+- `RARITIES`, `RARITY_WEIGHTS` and `PERKS` live in `js/data.js`; rolling and combining them is in `js/perks.js`. Creatures store `traits.rarity` and `traits.perks` (perk ids). A minor perk costs 1 point and a mid perk 2; a rarity's `sets` must each add up to its `points` (tested).
+- A perk has `self` (stat or `xp` bonuses for the creature), `allies` (the same for the rest of its party) and/or `party` (`win`, `demand.<cls>`, `finds`). Self bonuses are part of `creatureStats()`; ally and party effects apply only on expeditions via `partyPerks()` in `js/game.js`.
+
 ## Materials and smelting
 
 - `js/data.js` holds `FAMILIES` (metal, wood, crystal; 10 tiers each), `SCRAPS` (each with `value` and `maxTier`), and the odds constants `SMELT_FALLOFF` and `MAX_BATCH` (3 pieces per batch). `smeltOdds()` in `js/game.js` computes the odds: the weight of tier t is exp(-(t-1)² / 2σ²), where σ = √(total value) / SMELT_FALLOFF.

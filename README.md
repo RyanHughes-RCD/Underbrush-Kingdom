@@ -48,6 +48,19 @@ A phone-first web game about a band of tiny heroes living in the underbrush. Col
 
 Fighters gain XP for every encounter their party wins, and level up over time.
 
+### Rarity and perks
+
+Every creature rolls a **rarity** and random **perks** that help it and its party in battle (expedition encounters). Minor perks cost 1 point and mid perks 2:
+
+| Rarity | Points | Perk sets |
+|---|---|---|
+| Common | 1 | 1 minor |
+| Uncommon | 2 | 2 minors (60%) or 1 mid (40%) |
+| Rare | 3 | 3 minors (40%) or 1 mid + 1 minor (60%) |
+| Epic | 4 | 4 minors (30%), 1 mid + 2 minors (35%) or 2 mids (35%) |
+
+Starters are Common. Recruits from the Lure Post roll a rarity based on the quality of the weapon left there: a basic weapon gives about 57% Common and 3% Epic, a top-tier one about 14% Common and 29% Epic. Perks that suit a class are three times as likely to roll for it. The full perk list is `PERKS` in `js/data.js`.
+
 ### Stats
 
 Every fighter has **HP**, three offensive stats (**Strength**, **Dexterity**, **Intelligence**) and three defensive stats (**Might**, **Spirit**, **Luck**). Each class has its own leanings: archers favour Dexterity and Luck, knights Strength, Might and HP, and mice Intelligence and Spirit.

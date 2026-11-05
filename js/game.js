@@ -2,14 +2,15 @@
 // matters) and mutates/returns it. No DOM access here so it can be unit tested.
 
 import {
-  CLASSES, CLASS_IDS, ITEMS, WEAPONS, WORKSHOPS, EXPEDITION_TYPES, REGIONS, SCRAPS, MATERIALS,
+  CLASSES, CLASS_IDS, ITEMS, WEAPONS, WORKSHOPS, EXPEDITION_TYPES, REGIONS, SCRAPS, MATERIALS, RARITIES,
   materialAt, SMELT_FALLOFF, MAX_BATCH, WEAPON_COST, ACCENT_WORD,
   ENCOUNTER_MINUTES, MIN_ENCOUNTERS, MAX_ENCOUNTERS, MAX_PARTY,
   LURE_MINUTES, MAX_ROSTER,
 } from './data.js';
 import * as ST from './stats.js';
+import * as PK from './perks.js';
 
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 const MINUTE = 60 * 1000;
 
 // Debug/testing: multiplies the speed of all timers. Set via ?speed=60.
@@ -84,12 +85,20 @@ export function addLog(state, text, now = Date.now()) {
 
 // ---------- Creatures ----------
 
-export function addCreature(state, cls, weaponId = null) {
+/**
+ * Adds a creature. `lureQuality` is the quality of the weapon that drew it
+ * to the Lure Post (better weapons draw rarer creatures); starters use 1
+ * and are always Common.
+ */
+export function addCreature(state, cls, weaponId = null, lureQuality = null) {
   const rng = mulberry32(nextSeed(state));
   const used = new Set(state.creatures.map((c) => c.name));
   const pool = CLASSES[cls].names.filter((n) => !used.has(n));
   const name = pool.length ? pick(rng, pool) : `${pick(rng, CLASSES[cls].names)} ${state.nextId}`;
-  const c = { id: newId(state, 'c'), name, cls, level: 1, xp: 0, weaponId, traits: rollTraits(rng) };
+  const traits = rollTraits(rng);
+  const rarity = lureQuality == null ? 'common' : PK.rollRarity(rng, lureQuality);
+  Object.assign(traits, { rarity, perks: PK.rollPerks(rng, cls, rarity) });
+  const c = { id: newId(state, 'c'), name, cls, level: 1, xp: 0, weaponId, traits };
   state.creatures.push(c);
   return c;
 }
@@ -120,16 +129,21 @@ export function weaponName(w) {
 export function weaponTier(w) { return MATERIALS[w.material].tier; }
 export const withArticle = (name) => `${/^[aeiou]/i.test(name) ? 'an' : 'a'} ${name}`;
 
-export function creatureStats(c) { return ST.statsAt(c.cls, c.level, c.traits); }
+/** A fighter's stats, including its own perks (allies' perks apply on expeditions). */
+export function creatureStats(c, bonus = PK.selfBonus(c.traits?.perks)) {
+  return PK.applyStatBonus(ST.statsAt(c.cls, c.level, c.traits), bonus);
+}
 
 /** What a fighter hits for with its current weapon (or bare claws). */
-export function creatureDamage(state, c, weapon = getWeapon(state, c.weaponId)) {
-  const stats = creatureStats(c);
+export function creatureDamage(state, c, weapon = getWeapon(state, c.weaponId), bonus) {
+  const stats = creatureStats(c, bonus);
   return weapon ? ST.weaponDamage(weaponProfile(weapon), stats) : ST.unarmedDamage(c.cls, stats);
 }
 
 /** Overall power from stats and weapon damage; used for expedition odds. */
-export function creaturePowerExact(state, c) { return ST.powerOf(creatureStats(c), creatureDamage(state, c)); }
+export function creaturePowerExact(state, c, bonus) {
+  return ST.powerOf(creatureStats(c, bonus), creatureDamage(state, c, undefined, bonus));
+}
 export function creaturePower(state, c) { return Math.round(creaturePowerExact(state, c) * 10) / 10; }
 
 export function xpToNext(level) { return 3 + level * 2; }
@@ -159,17 +173,24 @@ export function expeditionName(typeId, regionId) {
   return `${EXPEDITION_TYPES[typeId].name} in ${REGIONS[regionId].name}`;
 }
 
-export function partyScore(state, partyIds, demand) {
-  return partyIds.reduce((sum, id) => {
+/** Everything a party's perks add: per-member stat/XP bonuses and party-wide effects. */
+export function partyPerks(state, partyIds) {
+  return PK.partyEffects(partyIds.map((id) => getCreature(state, id)?.traits?.perks || []));
+}
+
+export function partyScore(state, partyIds, demand, effects = partyPerks(state, partyIds)) {
+  return partyIds.reduce((sum, id, i) => {
     const c = getCreature(state, id);
-    const p = creaturePowerExact(state, c);
+    const p = creaturePowerExact(state, c, effects.perMember[i]);
     return sum + (c.cls === demand ? p * 1.6 : p);
   }, 0);
 }
 
-export function successChance(score, difficulty) {
-  return Math.min(0.95, Math.max(0.1, score / (score + difficulty)));
+/** Win chance: power against difficulty, plus perk bonuses, kept within 10-95%. */
+export function successChance(score, difficulty, bonus = 0) {
+  return Math.min(0.95, Math.max(0.1, score / (score + difficulty) + bonus));
 }
+const perkWin = (effects, demand) => effects.party.win + (effects.party.demand[demand] || 0);
 
 /** Expected scrap from one won encounter at this depth in this region. */
 export function expectedFinds(region, index) { return 2 + Math.floor(index / 3) + region.bonusFinds; }
@@ -177,16 +198,17 @@ export function expectedFinds(region, index) { return 2 + Math.floor(index / 3) 
 /** Rough odds and rewards shown to the player before setting out. */
 export function previewExpedition(state, typeId, regionId, partyIds, count) {
   const type = EXPEDITION_TYPES[typeId], region = REGIONS[regionId];
+  const fx = partyPerks(state, partyIds);
   const byDemand = {};
-  for (const cls of CLASS_IDS) byDemand[cls] = partyScore(state, partyIds, cls);
+  for (const cls of CLASS_IDS) byDemand[cls] = partyScore(state, partyIds, cls, fx);
   let wins = 0, finds = 0;
   for (let i = 0; i < count; i++) {
     const d = encounterDifficulty(region, i);
-    const p = type.encounters.reduce((s, e) => s + successChance(byDemand[e.demand], d), 0) / type.encounters.length;
+    const p = type.encounters.reduce((s, e) => s + successChance(byDemand[e.demand], d, perkWin(fx, e.demand)), 0) / type.encounters.length;
     wins += p;
-    finds += p * expectedFinds(region, i) + (1 - p) * 0.5;
+    finds += p * (expectedFinds(region, i) + Math.min(1, fx.party.finds)) + (1 - p) * 0.5;
   }
-  return { expectedWins: wins, avgChance: count ? wins / count : 0, expectedFinds: finds, expectedXp: wins * region.xpPerWin };
+  return { expectedWins: wins, avgChance: count ? wins / count : 0, expectedFinds: finds, expectedXp: wins * region.xpPerWin, perks: fx };
 }
 
 export function canStartExpedition(state, typeId, regionId, partyIds, count) {
@@ -214,14 +236,16 @@ export function startExpedition(state, typeId, regionId, partyIds, count, now = 
   if (err) throw new Error(err);
   const type = EXPEDITION_TYPES[typeId], region = REGIONS[regionId];
   const rng = mulberry32(nextSeed(state));
+  const fx = partyPerks(state, partyIds);
   const encounters = [];
   for (let i = 0; i < count; i++) {
     const tpl = pick(rng, type.encounters);
     const difficulty = encounterDifficulty(region, i);
-    const chance = successChance(partyScore(state, partyIds, tpl.demand), difficulty);
+    const chance = successChance(partyScore(state, partyIds, tpl.demand, fx), difficulty, perkWin(fx, tpl.demand));
     const success = rng() < chance;
     const loot = {};
-    const finds = success ? 1 + Math.floor(rng() * 3) + Math.floor(i / 3) + region.bonusFinds : (rng() < 0.5 ? 1 : 0);
+    let finds = success ? 1 + Math.floor(rng() * 3) + Math.floor(i / 3) + region.bonusFinds : (rng() < 0.5 ? 1 : 0);
+    if (success && rng() < fx.party.finds) finds += 1; // Forager, Treasure Nose
     for (let f = 0; f < finds; f++) {
       const item = pickWeighted(rng, region.loot);
       loot[item] = (loot[item] || 0) + 1;
@@ -268,14 +292,18 @@ export function claimExpedition(state, expeditionId, now = Date.now()) {
   for (const [k, q] of Object.entries(loot)) state.inventory[k] = (state.inventory[k] || 0) + q;
   state.expeditions.splice(idx, 1);
   const xp = wins * (REGIONS[e.region]?.xpPerWin || 1);
-  for (const id of e.partyIds) {
-    const c = getCreature(state, id);
-    if (c) grantXp(state, c, xp, now);
-  }
+  const present = e.partyIds.filter((id) => getCreature(state, id));
+  const fx = partyPerks(state, present);
+  const xpGiven = {};
+  present.forEach((id, i) => {
+    // Quick Learner, Mentor: XP bonuses, rounded down.
+    xpGiven[id] = Math.floor(xp * (1 + (fx.perMember[i].xp || 0)));
+    grantXp(state, getCreature(state, id), xpGiven[id], now);
+  });
   const lootText = Object.entries(loot).map(([k, q]) => `${q} ${ITEMS[k].name}${q > 1 ? 's' : ''}`).join(', ') || 'nothing';
   const early = done < e.encounters.length ? ' early' : '';
   addLog(state, `Party returned${early} from ${expeditionName(e.type, e.region)}: ${wins}/${done} encounters won, found ${lootText}.`, now);
-  return { loot, wins, done, xp };
+  return { loot, wins, done, xp, xpGiven };
 }
 
 // ---------- Workshops (smelting scrap into materials) ----------
@@ -384,7 +412,7 @@ export function startLure(state, weaponId, now = Date.now()) {
   if (err) throw new Error(err);
   const w = getWeapon(state, weaponId);
   const cls = WEAPONS[w.type].cls;
-  state.lures.push({ id: newId(state, 'l'), weaponId, cls, startedAt: now, endsAt: now + minutesToMs(LURE_MINUTES) });
+  state.lures.push({ id: newId(state, 'l'), weaponId, cls, quality: weaponProfile(w).quality, startedAt: now, endsAt: now + minutesToMs(LURE_MINUTES) });
   addLog(state, `Left ${withArticle(weaponName(w))} at the Lure Post. Something is watching...`, now);
 }
 
@@ -409,8 +437,9 @@ export function tick(state, now = Date.now()) {
   if (arrived.length) {
     state.lures = state.lures.filter((l) => l.endsAt > now);
     for (const l of arrived) {
-      const c = addCreature(state, l.cls, l.weaponId);
-      addLog(state, `${c.name} the ${CLASSES[l.cls].name} wandered in and claimed the ${weaponName(getWeapon(state, l.weaponId))}!`, now);
+      const c = addCreature(state, l.cls, l.weaponId, l.quality ?? weaponProfile(getWeapon(state, l.weaponId)).quality);
+      const r = RARITIES[c.traits.rarity].name;
+      addLog(state, `${withArticle(r)} ${CLASSES[l.cls].name}, ${c.name}, wandered in and claimed the ${weaponName(getWeapon(state, l.weaponId))}!`, now);
     }
     changed = true;
   }
@@ -423,7 +452,7 @@ const SAVE_KEY = 'underbrush-kingdom-save';
 
 export function serialize(state) { return JSON.stringify(state); }
 
-/** Upgrades older saves. v1 had generic wood/metal/gem and weapon tiers 1-3; v2 had one weapon type per class; v3 weapons had one material; v4 expeditions were zones, now type + region; v5 creatures had no traits. */
+/** Upgrades older saves. v1 had generic wood/metal/gem and weapon tiers 1-3; v2 had one weapon type per class; v3 weapons had one material; v4 expeditions were zones, now type + region; v5 creatures had no traits; v6 creatures had no perks. */
 export function migrate(s) {
   if (s.version === 1) {
     const map = { wood: 'wood', metal: 'metal', gem: 'crystal' };
@@ -462,6 +491,16 @@ export function migrate(s) {
     // v5 creatures all looked and grew alike; each gets its own traits.
     for (const c of s.creatures) if (!c.traits) c.traits = rollTraits(mulberry32(hashString(c.id + s.seed)));
     s.version = 6;
+  }
+  if (s.version === 6) {
+    // v6 creatures had no perks; each becomes Common with one minor perk.
+    for (const c of s.creatures) {
+      if (c.traits.perks) continue;
+      const rng = mulberry32(hashString(`perks:${c.id}:${s.seed}`));
+      c.traits.rarity = 'common';
+      c.traits.perks = PK.rollPerks(rng, c.cls, 'common');
+    }
+    s.version = 7;
   }
   return s;
 }
