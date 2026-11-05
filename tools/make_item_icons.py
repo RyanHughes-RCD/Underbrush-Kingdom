@@ -1,0 +1,211 @@
+"""Generates the 16x16 pixel-art item icons in assets/items/ and app icons in assets/icons/.
+
+Run: python3 tools/make_item_icons.py
+"""
+from PIL import Image
+import os
+
+PAL = {
+    '.': None,
+    'k': (24, 20, 28),      # outline
+    'b': (120, 78, 44),     # brown
+    'B': (166, 112, 62),    # light brown
+    'd': (78, 50, 30),      # dark brown
+    'r': (178, 52, 40),     # red cap
+    'R': (222, 92, 70),     # red highlight
+    's': (150, 150, 165),   # steel
+    'S': (205, 208, 220),   # steel light
+    'g': (110, 110, 118),   # stone
+    'G': (156, 154, 160),   # stone light
+    'p': (120, 70, 190),    # gem purple
+    'P': (190, 140, 240),   # gem light
+    'w': (245, 245, 250),   # white
+    'y': (214, 170, 60),    # gold
+    'l': (90, 140, 60),     # leaf
+}
+
+ICONS = {
+ 'twig': [
+  "................",
+  "................",
+  "............kk..",
+  "...........kBk..",
+  "..........kBk.kk",
+  ".........kBk.klk",
+  "....kk..kBdk.kk.",
+  "...klk.kBdk.....",
+  "....kkkBdk......",
+  ".....kBdk.......",
+  "....kBdk........",
+  "...kBdk.........",
+  "..kBdk..........",
+  "..kdk...........",
+  "...k............",
+  "................"],
+ 'bottlecap': [
+  "................",
+  "................",
+  "....kkkkkkkk....",
+  "...kRkRkRkRkk...",
+  "..kRRRRRRRRRRk..",
+  "..krRRRRRRRRrk..",
+  "..krrRRRRRRrrk..",
+  "..krrrrrrrrrrk..",
+  "..kkrkrkrkrkkk..",
+  "...kkkkkkkkkk...",
+  "................",
+  "................",
+  "................",
+  "................",
+  "................",
+  "................"],
+ 'pebble': [
+  "................",
+  "................",
+  "................",
+  "................",
+  "......kkkk......",
+  "....kkGGGGkk....",
+  "...kGGwGGGggk...",
+  "..kGGGGGGGgggk..",
+  "..kgGGGGGgggggk.",
+  "..kggggggggggk..",
+  "...kkggggggkk...",
+  ".....kkkkkk.....",
+  "................",
+  "................",
+  "................",
+  "................"],
+ 'wood': [
+  "................",
+  "................",
+  "................",
+  "....kkkkkkkkkk..",
+  "...kBBBBBBBBBkk.",
+  "..kBbBBBBbBBkbk.",
+  ".kkkkkkkkkkkbbk.",
+  ".kBBBBBBBBBkbk..",
+  ".kBbBBBdBBBkk...",
+  ".kBBBBBBBbBk....",
+  ".kbbbbbbbbbk....",
+  ".kkkkkkkkkkk....",
+  "................",
+  "................",
+  "................",
+  "................"],
+ 'metal': [
+  "................",
+  "................",
+  "................",
+  "................",
+  ".....kkkkkkkk...",
+  "....kSSSSSSSkk..",
+  "...kSwSSSSSksk..",
+  "..kkkkkkkkkssk..",
+  "..kSSSSSSSkssk..",
+  "..ksSSSSSSksk...",
+  "..kssssssskk....",
+  "..kkkkkkkkk.....",
+  "................",
+  "................",
+  "................",
+  "................"],
+ 'gem': [
+  "................",
+  "................",
+  "................",
+  ".....kkkkkk.....",
+  "....kPPwPPpk....",
+  "...kPPwPPPppk...",
+  "..kkkkkkkkkkkk..",
+  "...kPPPPPppppk..",
+  "....kPPPPpppk...",
+  ".....kPPpppk....",
+  "......kPppk.....",
+  ".......kpk......",
+  "........k.......",
+  "................",
+  "................",
+  "................"],
+ 'bow': [
+  "................",
+  "......kkk.......",
+  ".....kBBdk......",
+  "......kkBdk.....",
+  "......w.kBdk....",
+  "......w..kBk....",
+  "......w...kBk...",
+  "......w...kyk...",
+  "......w...kyk...",
+  "......w...kBk...",
+  "......w..kBk....",
+  "......w.kBdk....",
+  "......kkBdk.....",
+  ".....kBBdk......",
+  "......kkk.......",
+  "................"],
+ 'sword': [
+  "................",
+  "............kk..",
+  "...........kSk..",
+  "..........kSsk..",
+  ".........kSsk...",
+  "........kSsk....",
+  ".......kSsk.....",
+  "..kk..kSsk......",
+  "..kyk.kSk.......",
+  "...kykSk........",
+  "....kyk.........",
+  "...kbkyk........",
+  "..kbk.kyk.......",
+  ".kyk...kk.......",
+  "..k.............",
+  "................"],
+ 'staff': [
+  "................",
+  "..........kkk...",
+  ".........kPPpk..",
+  "........kPwPppk.",
+  "........kPPppk..",
+  ".........kpdk...",
+  "........kdbk....",
+  ".......kdbk.....",
+  "......kdbk......",
+  ".....kdbk.......",
+  "....kdbk........",
+  "...kdbk.........",
+  "..kdbk..........",
+  "..kbk...........",
+  "...k............",
+  "................"],
+}
+
+def render(rows, scale=1):
+    im = Image.new('RGBA', (16, 16), (0, 0, 0, 0))
+    for y, row in enumerate(rows):
+        for x, ch in enumerate(row):
+            c = PAL[ch]
+            if c:
+                im.putpixel((x, y), c + (255,))
+    return im
+
+here = os.path.dirname(os.path.abspath(__file__))
+root = os.path.dirname(here)
+os.makedirs(os.path.join(root, 'assets/items'), exist_ok=True)
+for name, rows in ICONS.items():
+    assert len(rows) == 16 and all(len(r) == 16 for r in rows), name
+    render(rows).save(os.path.join(root, 'assets/items', name + '.png'))
+
+# App icons: the three heroes on a mossy tile.
+sprites = [Image.open(os.path.join(root, 'assets/sprites', f)).convert('RGBA')
+           for f in ('archer-lizard.png', 'beetle-knight.png', 'wizard-mouse.png')]
+for size in (192, 512):
+    base = Image.new('RGBA', (96, 96), (52, 84, 54, 255))
+    for x in range(96):
+        for y in range(70, 96):
+            base.putpixel((x, y), (74, 110, 62, 255))
+    base.alpha_composite(sprites[1], (30, 24))
+    base.alpha_composite(sprites[0], (-6, 26))
+    base.alpha_composite(sprites[2], (40, 28))
+    base.resize((size, size), Image.NEAREST).save(os.path.join(root, f'assets/icons/icon-{size}.png'))
+print('ok')

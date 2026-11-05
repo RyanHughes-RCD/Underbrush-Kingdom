@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#1f2e22">
+  <meta name="description" content="Gather a band of Archer Lizards, Beetle Knights and Wizard Mice and send them on expeditions through the underbrush.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Underbrush Kingdom</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" href="assets/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <h1>Underbrush Kingdom</h1>
+      <div id="satchel" class="satchel" aria-label="Satchel"></div>
+    </header>
+    <main id="view" class="view"></main>
+    <nav class="tabs" id="tabs">
+      <button data-tab="camp" class="active"><img src="assets/sprites/archer-lizard.png" alt="">Camp</button>
+      <button data-tab="expeditions"><img src="assets/sprites/beetle-knight.png" alt="">Expeditions</button>
+      <button data-tab="workshops"><img src="assets/sprites/wizard-mouse.png" alt="">Workshops</button>
+    </nav>
+  </div>
+  <div id="modal" class="modal" hidden></div>
+  <div id="toast" class="toast" hidden></div>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "name": "Underbrush Kingdom",
+  "short_name": "Underbrush",
+  "description": "Gather Archer Lizards, Beetle Knights and Wizard Mice and send them on expeditions.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1f2e22",
+  "theme_color": "#1f2e22",
+  "icons": [
+    { "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
