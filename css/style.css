@@ -319,3 +319,7 @@ button { font-family: inherit; font-size: inherit; color: inherit; }
 .pips i { width: 9px; height: 9px; border: 2px solid var(--line); border-radius: 2px; background: var(--panel); }
 .pips i.on { background: var(--warn); }
 .plan-summary { min-height: 2.6em; }
+.stat .sname em { font-style: normal; font-size: 9px; margin-left: 1px; }
+.stat .sname em.hi { color: var(--good); } .stat .sname em.lo { color: var(--warn); }
+.stat i.fast { font-weight: 700; color: #1f7a1f; }
+.stat i.slow { color: #8a8070; }

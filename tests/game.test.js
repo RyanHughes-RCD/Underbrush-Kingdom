@@ -189,6 +189,19 @@ test('version 3 saves: weapons get basic fittings', () => {
   assert.deepEqual(s.weapons.map((w) => w.accent), ['iron', 'pine', 'quartz']);
 });
 
+test('every creature rolls its own traits, and v5 saves get them too', () => {
+  const s = G.newGame(12);
+  for (const c of s.creatures) { assert.ok(c.traits?.tint); assert.ok(c.traits.base.hp); }
+  const lured = G.addCreature(s, 'mage');
+  const twin = G.addCreature(s, 'mage');
+  assert.notDeepEqual(lured.traits, twin.traits);
+  const v5 = { version: 5, seed: 3, nextId: 3, expeditions: [], lures: [], log: [], jobs: [], discovered: [], inventory: {}, weapons: [],
+    creatures: [{ id: 'c1', name: 'Nib', cls: 'mage', level: 2, xp: 0, weaponId: null }] };
+  const a = G.deserialize(JSON.stringify(v5)), b = G.deserialize(JSON.stringify(v5));
+  assert.ok(a.creatures[0].traits.tint);
+  assert.deepEqual(a.creatures[0].traits, b.creatures[0].traits); // stable per creature
+});
+
 test('save round-trips', () => {
   const s = G.newGame(9);
   const copy = G.deserialize(G.serialize(s));

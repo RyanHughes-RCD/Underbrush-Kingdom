@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { statsAt, nextLevelGain, weaponProfile, weaponDamage, unarmedDamage, powerOf, gradeOf } from '../js/stats.js';
-import { CLASS_IDS, CLASSES, STAT_IDS, WEAPONS, FAMILIES } from '../js/data.js';
+import { statsAt, nextLevelGain, rollStatTraits, talent, BASE_SPREAD, GROWTH_SPREAD, weaponProfile, weaponDamage, unarmedDamage, powerOf, gradeOf } from '../js/stats.js';
+import { CLASS_IDS, CLASSES, STAT_IDS, WEAPONS, FAMILIES, CLASS_STATS } from '../js/data.js';
+import { mulberry32 } from '../js/game.js';
 
 test('every class has all seven stats, and they never drop as level rises', () => {
   for (const cls of CLASS_IDS) {
@@ -79,4 +80,30 @@ test('grades', () => {
   assert.equal(gradeOf(0.16), 'D');
   assert.equal(gradeOf(0.05), 'E');
   assert.equal(gradeOf(0), '-');
+});
+
+test('rolled traits stay within the spread and keep class identity', () => {
+  const rng = mulberry32(99);
+  for (let i = 0; i < 200; i++) {
+    const t = rollStatTraits(rng);
+    for (const s of STAT_IDS) {
+      assert.ok(Math.abs(t.base[s] - 1) <= BASE_SPREAD + 1e-9);
+      assert.ok(Math.abs(t.growth[s] - 1) <= GROWTH_SPREAD + 1e-9);
+    }
+    // Even an unlucky archer out-dexes a lucky knight.
+    assert.ok(statsAt('archer', 5, t).dex > CLASS_STATS.knight.base.dex * 1.2 + CLASS_STATS.knight.growth.dex * 1.25 * 4);
+  }
+});
+
+test('two creatures of a class end up with different stats', () => {
+  const rng = mulberry32(7);
+  const a = statsAt('mage', 10, rollStatTraits(rng)), b = statsAt('mage', 10, rollStatTraits(rng));
+  assert.notDeepEqual(a, b);
+});
+
+test('talent marks strong and weak stats', () => {
+  const t = { base: { str: 1.18, dex: 0.82, int: 1 }, growth: { str: 0.76, dex: 1.2, int: 1 } };
+  assert.deepEqual(talent(t, 'str'), { base: 'high', growth: 'low' });
+  assert.deepEqual(talent(t, 'dex'), { base: 'low', growth: 'high' });
+  assert.deepEqual(talent(t, 'int'), { base: '', growth: '' });
 });

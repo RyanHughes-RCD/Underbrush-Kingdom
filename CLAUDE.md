@@ -10,7 +10,8 @@ Static web game with no build step (HTML, CSS and ES modules). `npm test` runs t
 ## Stats
 
 - `STATS`, `CLASS_STATS` (base + growth per level), weapon `attack` and `scaling` in `WEAPONS`, `TIER_QUALITY` and `GRADES` all live in `js/data.js`. The formulas are in `js/stats.js`: stat = floor(base + growth × (level − 1)); quality = (2 × main + fittings) / 3; damage = quality × (attack + Σ scaling × stat); power = (damage + (MIG + SPI + LCK) / 2 + HP / 4) / 5.
-- Stats are derived from class and level, so they aren't stored in saves. In each class, one weapon has the higher base attack and the other scales better; `tests/stats.test.js` checks that they cross over.
+- Each creature has `traits` (rolled in `rollTraits()` in `js/game.js` when it's created): `base` and `growth` multipliers per stat (±20% / ±25%, see `rollStatTraits()` in `js/stats.js`) and a `tint` {h, s, l} for its colouring. Stats are derived from class, level and traits: stat = floor(base × baseMult + growth × growthMult × (level − 1)). Bodies list the palette indices that a tint recolours in `tints` (see `tintPalette()` in `js/sprites.js`).
+- Stats themselves aren't stored in saves, only the traits. In each class, one weapon has the higher base attack and the other scales better; `tests/stats.test.js` checks that they cross over.
 
 ## Materials and smelting
 

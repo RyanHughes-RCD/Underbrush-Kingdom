@@ -44,7 +44,7 @@ function fmtMinutes(min) {
 const icon = (id, cls = '') => `<img class="${cls}" src="${(ITEMS[id] || WEAPONS[id]).icon}" alt="${esc((ITEMS[id] || WEAPONS[id]).name)}">`;
 const sprite = (cls, size = 32, c = '') => S.creatureImg(S.creatureArt(cls), size, c);
 const equippedIds = (c) => { const w = G.getWeapon(state, c.weaponId); return w ? [{ type: w.type, material: w.material, accent: w.accent }] : []; };
-const creatureArt = (c) => S.creatureArt(c.cls, equippedIds(c));
+const creatureArt = (c) => S.creatureArt(c.cls, equippedIds(c), c.traits?.tint);
 const creatureSprite = (c, size, cls = '') => S.creatureImg(creatureArt(c), size, cls);
 const pieceIcon = (type, material, accent, size = 32) => {
   const art = S.weaponArt(type, material, accent);
@@ -83,14 +83,19 @@ const profileTags = (p) => `<span class="ptag atk">ATK ${p.attack}</span>${p.sca
 
 function statBlock(c) {
   const st = G.creatureStats(c);
-  const gain = ST.nextLevelGain(c.cls, c.level);
-  const cell = (id) => `<div class="stat ${STATS[id].group}"><span class="sname">${STATS[id].short}</span><b>${st[id]}</b>${gain[id] ? `<i>+${gain[id]}</i>` : '<i></i>'}</div>`;
+  const gain = ST.nextLevelGain(c.cls, c.level, c.traits);
+  const cell = (id) => {
+    const t = ST.talent(c.traits, id);
+    const mark = t.base === 'high' ? '<em class="hi" title="Started strong">▲</em>' : t.base === 'low' ? '<em class="lo" title="Started weak">▼</em>' : '';
+    return `<div class="stat ${STATS[id].group}"><span class="sname">${STATS[id].short}${mark}</span><b>${st[id]}</b>
+      <i class="${t.growth === 'high' ? 'fast' : t.growth === 'low' ? 'slow' : ''}" title="${t.growth === 'high' ? 'Grows fast' : t.growth === 'low' ? 'Grows slowly' : 'Grows normally'}">${gain[id] ? `+${gain[id]}` : '+0'}</i></div>`;
+  };
   return `<div class="stat-sheet">
       ${cell('hp')}
       <div class="stat-group"><span class="glabel">Offense</span>${['str', 'dex', 'int'].map(cell).join('')}</div>
       <div class="stat-group"><span class="glabel">Defense</span>${['mig', 'spi', 'lck'].map(cell).join('')}</div>
     </div>
-    <p class="hint small" style="margin:4px 0 0">Small numbers show what the next level adds.</p>`;
+    <p class="hint small" style="margin:4px 0 0">Small numbers show what the next level adds. ▲/▼ mark stats that started above or below ${esc(CLASSES[c.cls].name)} average; bold green growth is a fast grower, grey a slow one.</p>`;
 }
 
 // ---------- Camp ----------

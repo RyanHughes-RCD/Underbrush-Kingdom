@@ -50,7 +50,9 @@ Fighters gain XP for every encounter their party wins, and level up over time.
 
 ### Stats
 
-Every fighter has **HP**, three offensive stats (**Strength**, **Dexterity**, **Intelligence**) and three defensive stats (**Might**, **Spirit**, **Luck**). They're set by class and grow each level: archers lean on Dexterity and Luck, knights on Strength, Might and HP, and mice on Intelligence and Spirit.
+Every fighter has **HP**, three offensive stats (**Strength**, **Dexterity**, **Intelligence**) and three defensive stats (**Might**, **Spirit**, **Luck**). Each class has its own leanings: archers favour Dexterity and Luck, knights Strength, Might and HP, and mice Intelligence and Spirit.
+
+**No two creatures are alike.** Every creature that joins, starters included, rolls its own multipliers on its class's numbers: up to ±20% on each starting stat and ±25% on how fast each stat grows per level. A fighter's sheet marks stats that started above (▲) or below (▼) their class average, and shows fast growers in bold green. Each creature also gets its own colouring: the body colours marked "varies per creature" in the Sprite Workshop are shifted in hue and lightly in saturation and brightness. About a third keep close to their class's usual colours.
 
 Weapons have a base **attack** and **scaling** grades (S to E) for the stats they draw on:
 

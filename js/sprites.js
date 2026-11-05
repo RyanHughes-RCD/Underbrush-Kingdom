@@ -2,7 +2,9 @@
 // points. Data lives in assets/sprites/sprites.json, edited with the Sprite
 // Workshop. The sheet has three sections:
 //
-//   bodies.<class>   one per class, with named anchors, e.g. {hand: {x, y}}
+//   bodies.<class>   one per class, with named anchors, e.g. {hand: {x, y}},
+//                    and `tints`: palette indices that vary per creature
+//                    (each creature shifts their hue; see tintPalette())
 //   weapons.<type>   one design per weapon type (longbow, mace, tome, ...)
 //   pieces.<id>      other gear: armour, hats, anything worn
 //
@@ -67,6 +69,42 @@ export function autoColors(palette, swaps, materialId) {
 
 const applyColors = (palette, colors) => palette.map((c, i) => colors[i] || c);
 
+function hexToHsl(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min, s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  const h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [h * 60, s, l];
+}
+function hslToHex(h, s, l) {
+  h = ((h % 360) + 360) % 360; s = Math.max(0, Math.min(1, s)); l = Math.max(0, Math.min(1, l));
+  const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2;
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return '#' + [r, g, b].map((v) => Math.round((v + m) * 255).toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * A creature's own colouring: rotates the hue of the body's `tints` colours
+ * by `tint.h` degrees and scales their saturation (`tint.s`) and lightness
+ * (`tint.l`). Other colours (outlines, eyes, armour) are left alone.
+ */
+export function tintPalette(palette, indices, tint) {
+  if (!tint || !indices?.length) return palette;
+  return palette.map((hex, i) => {
+    if (!indices.includes(i)) return hex;
+    const [h, s, l] = hexToHsl(hex);
+    return hslToHex(h + (tint.h || 0), s * (tint.s ?? 1), l * (tint.l ?? 1));
+  });
+}
+
+/** A body sprite recoloured for one creature. */
+export function tintedBody(data, cls, tint) {
+  const body = data.bodies[cls];
+  return tint ? { ...body, palette: tintPalette(body.palette, body.tints, tint) } : body;
+}
+
 /**
  * The sprite for one weapon type in a main material and (optionally) a
  * fittings material: the main material's own design if it has one,
@@ -125,11 +163,12 @@ function resolve(data, e) {
 
 /**
  * Which pieces a class wears, and where. `equipped` lists piece ids and/or
- * weapons as {type, material, accent}. Returns draw-ordered layers with positions
+ * weapons as {type, material, accent}; `tint` is the creature's colouring.
+ * Returns draw-ordered layers with positions
  * relative to the composite's top-left (body at PAD, PAD).
  */
-export function layout(data, cls, equipped = []) {
-  const body = data.bodies[cls];
+export function layout(data, cls, equipped = [], tint = null) {
+  const body = tintedBody(data, cls, tint);
   if (!body) return [];
   const eq = equipped.map((e) => resolve(data, e)).filter(Boolean);
   const eqSlots = new Set(eq.map(([, p]) => p.slot));
@@ -163,14 +202,14 @@ function spriteCanvas(sprite) {
  * Returns {canvas, url, w, h} where w/h are the body's size; the canvas is
  * (w + 2*PAD) x (h + 2*PAD) with the body's feet at (PAD + w/2, PAD + h).
  */
-export function creatureArt(cls, equipped = []) {
-  const key = `c:${cls}:${JSON.stringify(equipped)}`;
+export function creatureArt(cls, equipped = [], tint = null) {
+  const key = `c:${cls}:${JSON.stringify(equipped)}:${tint ? `${tint.h},${tint.s},${tint.l}` : ''}`;
   if (cache.has(key)) return cache.get(key);
   const body = sheet.bodies[cls];
   const c = document.createElement('canvas');
   c.width = body.w + PAD * 2; c.height = body.h + PAD * 2;
   const ctx = c.getContext('2d');
-  for (const part of layout(sheet, cls, equipped)) ctx.drawImage(spriteCanvas(part.sprite), part.x, part.y);
+  for (const part of layout(sheet, cls, equipped, tint)) ctx.drawImage(spriteCanvas(part.sprite), part.x, part.y);
   const art = { canvas: c, url: c.toDataURL(), w: body.w, h: body.h };
   cache.set(key, art);
   return art;

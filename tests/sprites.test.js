@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { layout, decode, PAD, weaponSprite, autoColors, variantKind, accentKind } from '../js/sprites.js';
+import { layout, decode, PAD, weaponSprite, autoColors, variantKind, accentKind, tintPalette, tintedBody } from '../js/sprites.js';
 import { CLASS_IDS, CLASSES, WEAPONS, FAMILIES } from '../js/data.js';
 
 const sheet = JSON.parse(readFileSync(new URL('../assets/sprites/sprites.json', import.meta.url)));
@@ -88,4 +88,18 @@ test('worn pieces show by default and an equipped weapon replaces one in the sam
   assert.deepEqual(layout(data, 'archer').map((p) => p.id), ['hat', 'archer', 'starter-bow']);
   assert.deepEqual(layout(data, 'archer', [{ type: 'recurve', material: 'pine' }]).map((p) => p.id), ['hat', 'archer', 'recurve:pine']);
   assert.deepEqual(layout(data, 'knight').map((p) => p.id), ['knight']);
+});
+
+test('a creature tint only recolours the body colours marked to vary', () => {
+  for (const cls of Object.keys(sheet.bodies)) {
+    const body = sheet.bodies[cls];
+    assert.ok(body.tints?.length, `${cls} has colours that vary`);
+    const t = tintedBody(sheet, cls, { h: 120, s: 1.2, l: 1 });
+    body.palette.forEach((c, i) => {
+      if (body.tints.includes(i)) assert.notEqual(t.palette[i], c, `${cls} colour ${i}`);
+      else assert.equal(t.palette[i], c);
+    });
+  }
+  assert.deepEqual(tintPalette(['#ff0000'], [0], { h: 0, s: 1, l: 1 }), ['#ff0000']);
+  assert.deepEqual(tintPalette(['#ff0000'], [0], { h: 120, s: 1, l: 1 }), ['#00ff00']);
 });

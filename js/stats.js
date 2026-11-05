@@ -3,16 +3,43 @@
 
 import { CLASS_STATS, STAT_IDS, WEAPONS, MATERIALS, GRADES } from './data.js';
 
-/** A class's stats at a level: floor(base + growth * (level - 1)). */
-export function statsAt(cls, level) {
+// Each creature rolls its own multipliers on its class's base stats and
+// growth when it joins, so no two fighters of a class are quite alike.
+export const BASE_SPREAD = 0.2;    // base stats vary by up to ±20%
+export const GROWTH_SPREAD = 0.25; // growth per level varies by up to ±25%
+
+/** Rolls a creature's stat multipliers with `rng` (a function returning 0-1). */
+export function rollStatTraits(rng) {
+  const roll = (spread) => Math.round((1 - spread + rng() * spread * 2) * 100) / 100;
+  return {
+    base: Object.fromEntries(STAT_IDS.map((s) => [s, roll(BASE_SPREAD)])),
+    growth: Object.fromEntries(STAT_IDS.map((s) => [s, roll(GROWTH_SPREAD)])),
+  };
+}
+
+/**
+ * A creature's stats at a level: floor(base * baseMult + growth * growthMult
+ * * (level - 1)). Without traits this is the class average.
+ */
+export function statsAt(cls, level, traits = null) {
   const { base, growth } = CLASS_STATS[cls];
-  return Object.fromEntries(STAT_IDS.map((s) => [s, Math.floor(base[s] + growth[s] * (level - 1))]));
+  const bm = traits?.base || {}, gm = traits?.growth || {};
+  return Object.fromEntries(STAT_IDS.map((s) => [s, Math.floor(base[s] * (bm[s] ?? 1) + growth[s] * (gm[s] ?? 1) * (level - 1))]));
 }
 
 /** Stats gained on the next level up. */
-export function nextLevelGain(cls, level) {
-  const now = statsAt(cls, level), next = statsAt(cls, level + 1);
+export function nextLevelGain(cls, level, traits = null) {
+  const now = statsAt(cls, level, traits), next = statsAt(cls, level + 1, traits);
   return Object.fromEntries(STAT_IDS.map((s) => [s, next[s] - now[s]]));
+}
+
+/**
+ * How a creature compares with its class on one stat: 'high', 'low' or ''
+ * for its starting value and for its growth.
+ */
+export function talent(traits, stat) {
+  const mark = (m, spread) => (m >= 1 + spread / 2 ? 'high' : m <= 1 - spread / 2 ? 'low' : '');
+  return { base: mark(traits?.base?.[stat] ?? 1, BASE_SPREAD), growth: mark(traits?.growth?.[stat] ?? 1, GROWTH_SPREAD) };
 }
 
 export function gradeOf(coef) {

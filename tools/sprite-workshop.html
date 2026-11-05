@@ -198,6 +198,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; width: 100%; }
         <label class="row" style="gap:4px;font-size:13px"><input type="checkbox" id="pv-flip"> Face left</label>
         <label class="row" style="gap:4px;font-size:13px"><input type="checkbox" id="pv-anchors"> Show anchors</label>
       </div>
+      <div class="row"><button class="btn sm" id="pv-random">Random creature</button><button class="btn sm" id="pv-usual">Usual colours</button><span class="hint" id="pv-tint-label"></span></div>
       <p class="hint">This is how the game composes a fighter: back pieces, then the body, then front pieces, each pivot snapped to its anchor.</p>
     </section>
   </aside>
@@ -246,6 +247,7 @@ let color = 0;                  // palette index; -1 = transparent
 let activeAnchor = 'hand';
 let pvBody = 'archer';
 let pvEquip = null;             // {type, material, accent} or null
+let pvTint = null;              // {h, s, l} preview colouring, or null for the usual colours
 let db = null, canWrite = true, loaded = false;
 const dirty = new Map();        // "kind/id" -> timer
 const writing = new Set();
@@ -280,6 +282,26 @@ function autoColors(pal, swaps, mat) {
   return out;
 }
 const applyColors = (pal, colors) => pal.map((c, i) => colors[i] || c);
+// Per-creature colouring, same as tintPalette() in js/sprites.js: rotates the
+// hue of a body's `tints` colours and scales their saturation and lightness.
+function hexToHsl(hex) {
+  const n = parseInt(hex.slice(1), 16); const r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min, s2 = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  const h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [h * 60, s2, l];
+}
+function hslToHex(h, s2, l) {
+  h = ((h % 360) + 360) % 360; s2 = Math.max(0, Math.min(1, s2)); l = Math.max(0, Math.min(1, l));
+  const c = (1 - Math.abs(2 * l - 1)) * s2, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2;
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return '#' + [r, g, b].map((v) => Math.round((v + m) * 255).toString(16).padStart(2, '0')).join('');
+}
+function tintedBody(cls, tint) {
+  const body = sheet.bodies[cls]; if (!tint || !body?.tints?.length) return body;
+  return { ...body, palette: body.palette.map((hex, i) => { if (!body.tints.includes(i)) return hex; const [h, s2, l] = hexToHsl(hex); return hslToHex(h + tint.h, s2 * tint.s, l * tint.l); }) };
+}
 function holderOf(type, mat) { const d = sheet.weapons[type]; const v = variantOf(d, mat); return v?.pixels ? v : d; }
 function weaponSprite(type, mat, acc) {
   const d = sheet.weapons[type]; if (!d) return null;
@@ -299,6 +321,7 @@ function accentKind(type, mat, acc) {
 const KIND_LABEL = { design: 'own design', recolour: 'recoloured', auto: 'automatic' };
 // What a colour of the selected weapon follows: 'main', 'accent' or 'fixed'.
 function roleOf(i) {
+  if (sel?.kind === 'bodies') return (cur().tints || []).includes(i) ? 'tint' : 'fixed';
   if (!isWeapon()) return 'fixed';
   const h = cur();
   if ((h.accentSwaps || []).includes(i)) return 'accent';
@@ -335,8 +358,8 @@ function thumb(canvas, sp) {
 }
 
 // Same rules as the game's js/sprites.js layout().
-function layout(cls, equipped) {
-  const body = sheet.bodies[cls]; if (!body) return [];
+function layout(cls, equipped, tint = null) {
+  const body = tintedBody(cls, tint); if (!body) return [];
   const eq = equipped.map((e) => (typeof e === 'string' ? (sheet.pieces[e] ? [e, sheet.pieces[e]] : null) : [`${e.type}:${e.material}+${e.accent}`, weaponSprite(e.type, e.material, e.accent)])).filter((x) => x && x[1]);
   const slots = new Set(eq.map(([, p]) => p.slot)); const ids = new Set(eq.map(([id]) => id));
   const worn = Object.entries(sheet.pieces).filter(([id, p]) => (p.wornBy || []).includes(cls) && !slots.has(p.slot) && !ids.has(id));
@@ -498,13 +521,18 @@ function renderPalette() {
   const pal = palette();
   if (color >= pal.length) color = pal.length - 1;
   el.innerHTML = `<button class="swatch clear ${color < 0 ? 'sel' : ''}" data-color="-1" title="Transparent"></button>` +
-    pal.map((h, i) => { const r = roleOf(i); return `<button class="swatch ${i === color ? 'sel' : ''} ${r === 'main' ? 'swap' : r === 'accent' ? 'acc' : ''}" data-color="${i}" style="background:${h}" title="${h}${r === 'main' ? ' · follows the main material' : r === 'accent' ? ' · follows the fittings' : ''}"></button>`; }).join('');
+    pal.map((h, i) => { const r = roleOf(i); return `<button class="swatch ${i === color ? 'sel' : ''} ${r === 'main' || r === 'tint' ? 'swap' : r === 'accent' ? 'acc' : ''}" data-color="${i}" style="background:${h}" title="${h}${r === 'main' ? ' · follows the main material' : r === 'accent' ? ' · follows the fittings' : r === 'tint' ? ' · varies per creature' : ''}"></button>`; }).join('');
   $('#pal-edit').disabled = color < 0;
   if (color >= 0) $('#pal-edit').value = pal[color];
   $('#pal-add').disabled = pal.length >= CHARS.length;
   const row = $('#swap-row');
-  row.hidden = !isWeapon();
-  if (!row.hidden) {
+  row.hidden = !(isWeapon() || sel.kind === 'bodies');
+  if (sel.kind === 'bodies') {
+    const r = color < 0 ? 'fixed' : roleOf(color);
+    $('#pal-role').innerHTML = [['fixed', 'is the same on every creature'], ['tint', 'varies per creature']].map(([v, t]) => `<option value="${v}" ${v === r ? 'selected' : ''}>${t}</option>`).join('');
+    $('#pal-role').disabled = color < 0;
+    $('#swap-label').textContent = color < 0 ? 'Pick a colour first.' : r === 'tint' ? 'Each creature shifts the hue of this colour. Try "Random creature" in the fitting room.' : 'Outlines, eyes and armour usually stay fixed.';
+  } else if (!row.hidden) {
     const r = color < 0 ? 'fixed' : roleOf(color);
     const mainName = MATERIALS[sel.mat].name, accName = MATERIALS[sel.acc].name;
     const opts = [['fixed', 'is fixed'], ...(ownDesign() ? [] : [['main', `follows the main material (${mainName})`]]), ['accent', `follows the fittings (${accName})`]];
@@ -624,7 +652,7 @@ function drawPreview(t) {
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, c.width, c.height);
   const comp = document.createElement('canvas'); comp.width = W; comp.height = H;
   const cc = comp.getContext('2d');
-  for (const p of layout(pvBody, pvEquip ? [pvEquip] : [])) cc.drawImage(spriteCanvas(p.sprite), p.x, p.y);
+  for (const p of layout(pvBody, pvEquip ? [pvEquip] : [], pvTint)) cc.drawImage(spriteCanvas(p.sprite), p.x, p.y);
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const k = $('#pv-squish').checked && !reduce ? Math.sin(t * 6) : 0;
   const sy = 1 + 0.1 * k, sx = 1 - 0.07 * k, flip = $('#pv-flip').checked ? -1 : 1;
@@ -653,6 +681,10 @@ function setColor(i, hex) {
   } else cur().palette[i] = hex;
 }
 function setRole(i, role) {
+  if (sel.kind === 'bodies') {
+    const b = cur(); const t = new Set(b.tints || []);
+    role === 'tint' ? t.add(i) : t.delete(i); b.tints = [...t].sort((a, c) => a - c); return;
+  }
   const d = doc(), h = cur();
   const drop = (list, obj) => { for (const v of Object.values(obj || {})) if (v.colors) delete v.colors[i]; return (list || []).filter((x) => x !== i); };
   if (!ownDesign()) d.swaps = drop(d.swaps, d.variants);
@@ -665,6 +697,7 @@ function setRole(i, role) {
 function remapPalette(holder, remap) {
   holder.pixels = fromIdx(toIdx(holder).map((v) => (v < 0 ? -1 : remap.get(v))));
   holder.palette = [...remap.keys()].sort((a, b) => remap.get(a) - remap.get(b)).map((v) => holder.palette[v]);
+  if (sel.kind === 'bodies' && holder.tints) holder.tints = holder.tints.filter((i) => remap.has(i)).map((i) => remap.get(i));
   if (!isWeapon()) return;
   const remapColors = (obj) => { for (const v of Object.values(obj || {})) if (v.colors) v.colors = Object.fromEntries(Object.entries(v.colors).filter(([i]) => remap.has(+i)).map(([i, c]) => [remap.get(+i), c])); };
   const remapList = (list) => (list || []).filter((i) => remap.has(i)).map((i) => remap.get(i));
@@ -771,6 +804,14 @@ document.addEventListener('click', (ev) => {
     case 'btn-download': downloadJson(); break;
     case 'btn-send': sendToGame(); break;
     case 'btn-png': downloadPng(); break;
+    case 'pv-random': {
+      const near = Math.random() < 0.3;
+      pvTint = { h: Math.round(near ? Math.random() * 40 - 20 : Math.random() * 360 - 180), s: Math.round((0.9 + Math.random() * 0.6) * 100) / 100, l: Math.round((0.9 + Math.random() * 0.2) * 100) / 100 };
+      $('#pv-tint-label').textContent = `hue ${pvTint.h > 0 ? '+' : ''}${pvTint.h}°, saturation ×${pvTint.s}, light ×${pvTint.l}`;
+      if (!(sheet.bodies[pvBody].tints || []).length) $('#pv-tint-label').textContent = 'No colours on this body vary yet. Mark some in its palette.';
+      break;
+    }
+    case 'pv-usual': pvTint = null; $('#pv-tint-label').textContent = ''; break;
   }
 });
 
@@ -914,6 +955,7 @@ function importPng(file) {
     sp.w = c.width; sp.h = c.height; sp.palette = pal.length ? pal : ['#141414']; sp.pixels = fromIdx(a);
     // A new shared weapon shape means new colour numbers: clear the swap marks and recolours.
     let note = '';
+    if (sel.kind === 'bodies') { sp.tints = []; note = ' Mark which colours vary per creature again.'; }
     if (isWeapon()) {
       sp.accentSwaps = []; sp.accents = {};
       if (!ownDesign()) { sp.swaps = []; for (const v of Object.values(sp.variants || {})) delete v.colors; }

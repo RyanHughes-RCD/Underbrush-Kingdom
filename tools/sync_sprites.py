@@ -16,7 +16,7 @@ PAD = 8
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SHEET = os.path.join(ROOT, 'assets/sprites/sprites.json')
 FILES = {'archer': 'archer-lizard', 'knight': 'beetle-knight', 'mage': 'wizard-mouse'}
-KEEP = ('name', 'w', 'h', 'palette', 'pixels', 'anchors', 'slot', 'anchor', 'pivot', 'layer', 'wornBy', 'swaps', 'variants', 'accentSwaps', 'accents')
+KEEP = ('name', 'w', 'h', 'palette', 'pixels', 'anchors', 'slot', 'anchor', 'pivot', 'layer', 'wornBy', 'swaps', 'variants', 'accentSwaps', 'accents', 'tints')
 
 
 def validate(kind, id_, s):
@@ -25,6 +25,9 @@ def validate(kind, id_, s):
     if kind == 'pieces':
         for k in ('slot', 'anchor', 'pivot'):
             assert k in s, f'{kind}/{id_}: missing {k}'
+    if kind == 'bodies':
+        for i in s.get('tints', []):
+            assert 0 <= i < len(s['palette']), f'{kind}/{id_}: varying colour {i} not in palette'
     if kind == 'weapons':
         for k in ('anchor', 'pivot'):
             assert k in s, f'{kind}/{id_}: missing {k}'

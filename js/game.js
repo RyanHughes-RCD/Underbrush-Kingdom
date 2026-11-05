@@ -9,7 +9,7 @@ import {
 } from './data.js';
 import * as ST from './stats.js';
 
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 const MINUTE = 60 * 1000;
 
 // Debug/testing: multiplies the speed of all timers. Set via ?speed=60.
@@ -34,6 +34,14 @@ function nextSeed(state) {
   const rng = mulberry32(state.seed);
   state.seed = Math.floor(rng() * 2 ** 32);
   return state.seed;
+}
+
+function hashString(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619);
+  // Final avalanche (murmur3 fmix32) so similar strings give unrelated seeds.
+  h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16;
+  return h >>> 0;
 }
 
 function pick(rng, arr) { return arr[Math.floor(rng() * arr.length)]; }
@@ -81,9 +89,24 @@ export function addCreature(state, cls, weaponId = null) {
   const used = new Set(state.creatures.map((c) => c.name));
   const pool = CLASSES[cls].names.filter((n) => !used.has(n));
   const name = pool.length ? pick(rng, pool) : `${pick(rng, CLASSES[cls].names)} ${state.nextId}`;
-  const c = { id: newId(state, 'c'), name, cls, level: 1, xp: 0, weaponId };
+  const c = { id: newId(state, 'c'), name, cls, level: 1, xp: 0, weaponId, traits: rollTraits(rng) };
   state.creatures.push(c);
   return c;
+}
+
+/**
+ * Everything that makes one creature unique: stat multipliers and a colour
+ * tint. About a third keep close to their class's usual colours; the rest
+ * can land anywhere on the colour wheel.
+ */
+export function rollTraits(rng) {
+  const near = rng() < 0.3;
+  const tint = {
+    h: Math.round(near ? rng() * 40 - 20 : rng() * 360 - 180),
+    s: Math.round((0.9 + rng() * 0.6) * 100) / 100,
+    l: Math.round((0.9 + rng() * 0.2) * 100) / 100,
+  };
+  return { ...ST.rollStatTraits(rng), tint };
 }
 
 export function getCreature(state, id) { return state.creatures.find((c) => c.id === id); }
@@ -97,7 +120,7 @@ export function weaponName(w) {
 export function weaponTier(w) { return MATERIALS[w.material].tier; }
 export const withArticle = (name) => `${/^[aeiou]/i.test(name) ? 'an' : 'a'} ${name}`;
 
-export function creatureStats(c) { return ST.statsAt(c.cls, c.level); }
+export function creatureStats(c) { return ST.statsAt(c.cls, c.level, c.traits); }
 
 /** What a fighter hits for with its current weapon (or bare claws). */
 export function creatureDamage(state, c, weapon = getWeapon(state, c.weaponId)) {
@@ -400,7 +423,7 @@ const SAVE_KEY = 'underbrush-kingdom-save';
 
 export function serialize(state) { return JSON.stringify(state); }
 
-/** Upgrades older saves. v1 had generic wood/metal/gem and weapon tiers 1-3; v2 had one weapon type per class; v3 weapons had one material; v4 expeditions were zones, now type + region. */
+/** Upgrades older saves. v1 had generic wood/metal/gem and weapon tiers 1-3; v2 had one weapon type per class; v3 weapons had one material; v4 expeditions were zones, now type + region; v5 creatures had no traits. */
 export function migrate(s) {
   if (s.version === 1) {
     const map = { wood: 'wood', metal: 'metal', gem: 'crystal' };
@@ -434,6 +457,11 @@ export function migrate(s) {
     const map = { thicket: 'scouting', gutter: 'skirmish', creek: 'research', meadow: 'excursion' };
     for (const e of s.expeditions) if (!e.region) { e.region = e.type; e.type = map[e.type] || 'excursion'; }
     s.version = 5;
+  }
+  if (s.version === 5) {
+    // v5 creatures all looked and grew alike; each gets its own traits.
+    for (const c of s.creatures) if (!c.traits) c.traits = rollTraits(mulberry32(hashString(c.id + s.seed)));
+    s.version = 6;
   }
   return s;
 }
