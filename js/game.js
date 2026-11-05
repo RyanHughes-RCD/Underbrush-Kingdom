@@ -385,7 +385,7 @@ export function migrate(s) {
     }
     s.jobs = s.jobs.map((j) => {
       const ws = WORKSHOPS[j.workshop];
-      return { ...j, input: ws.input, count: 4, result: materialAt(ws.family, 1) };
+      return { ...j, input: ws.input, count: 3, result: materialAt(ws.family, 1) };
     });
     s.version = 2;
   }

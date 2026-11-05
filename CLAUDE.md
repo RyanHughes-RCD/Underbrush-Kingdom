@@ -4,7 +4,7 @@ Static web game with no build step (HTML, CSS and ES modules). `npm test` runs t
 
 ## Materials and smelting
 
-- `js/data.js` holds `FAMILIES` (metal, wood, crystal; 10 tiers each), `SCRAPS` (each with `value` and `maxTier`), and the odds constants `SMELT_FALLOFF` and `MAX_BATCH`. `smeltOdds()` in `js/game.js` computes the odds: the weight of tier t is exp(-(t-1)² / 2σ²), where σ = √(total value) / SMELT_FALLOFF.
+- `js/data.js` holds `FAMILIES` (metal, wood, crystal; 10 tiers each), `SCRAPS` (each with `value` and `maxTier`), and the odds constants `SMELT_FALLOFF` and `MAX_BATCH` (3 pieces per batch). `smeltOdds()` in `js/game.js` computes the odds: the weight of tier t is exp(-(t-1)² / 2σ²), where σ = √(total value) / SMELT_FALLOFF.
 - Material icons are generated into `assets/items/materials/` by `tools/make_item_icons.py`, using each material's palette in `data.js`.
 - Saves are versioned; `migrate()` in `js/game.js` upgrades old ones. Bump `SAVE_VERSION` and add a migration step whenever the save shape changes.
 

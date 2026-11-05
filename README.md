@@ -24,7 +24,7 @@ A phone-first web game about a band of tiny heroes living in the underbrush. Col
    - The Forge: bottle caps → **metals** (Iron, Copper, Bronze … Godsbane)
    - Enchanter's Hut: pebbles → **crystals** (Quartz, Amethyst, Garnet … Prismheart)
 
-   Each scrap has a **value**, and a batch's total value sets the odds. Tier 1 is always the likeliest, and more value makes rarer tiers likelier. Each scrap also has a highest tier it can ever reach; bottle caps, twigs and pebbles top out at tier 4. With 3 bottle caps the odds are about 50% Iron, 35% Copper, 12% Bronze and 2% Steel. The workshop shows the odds before you commit, and the result is revealed when the batch finishes. Materials you haven't found yet show as "?".
+   A batch holds up to 3 pieces of scrap. Each scrap has a **value**, and the batch's total value sets the odds. Tier 1 is always the likeliest, and more value makes rarer tiers likelier. Each scrap also has a highest tier it can ever reach; bottle caps, twigs and pebbles top out at tier 4. With 3 bottle caps the odds are about 50% Iron, 35% Copper, 12% Bronze and 2% Steel. The workshop shows the odds before you commit, and the result is revealed when the batch finishes. Materials you haven't found yet show as "?".
 5. **Craft weapons.** A weapon takes 3 of one material: a Pine Bow, a Steel Sword, an Amethyst Staff. Its power comes from the material's tier. Equip one to raise a fighter's power…
 6. **…or lure a recruit.** Leave a weapon at the **Lure Post** and, after a while, a new fighter of that class wanders in to claim it.
 

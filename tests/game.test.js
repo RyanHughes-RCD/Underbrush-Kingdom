@@ -48,7 +48,7 @@ test('smelting odds: 3 bottle caps give about 50% iron, never above steel', () =
   assert.ok(Math.abs(odds.reduce((a, o) => a + o.p, 0) - 1) < 1e-9);
   assert.ok(odds[3].p < 0.05, `steel should be very rare (${odds[3].p})`);
   // More value in, better odds of higher tiers.
-  assert.ok(G.smeltOdds('bottlecap', 10)[3].p > G.smeltOdds('bottlecap', 3)[3].p);
+  assert.ok(G.smeltOdds('bottlecap', 3)[3].p > G.smeltOdds('bottlecap', 2)[3].p);
   assert.ok(G.smeltOdds('bottlecap', 1)[0].p > 0.7);
 });
 
@@ -66,9 +66,9 @@ test('smelting results match the odds over many batches', () => {
 
 test('workshop smelts over time, batches queue in turn', () => {
   const s = G.newGame(3);
-  s.inventory.twig = 7;
-  const a = G.startSmelting(s, 'woodworker', 4, 0);
-  const b = G.startSmelting(s, 'woodworker', 3, 0);
+  s.inventory.twig = 5;
+  const a = G.startSmelting(s, 'woodworker', 3, 0);
+  const b = G.startSmelting(s, 'woodworker', 2, 0);
   assert.equal(s.inventory.twig, 0);
   assert.equal(b.startsAt, a.endsAt);
   G.tick(s, WORKSHOPS.woodworker.minutes * MIN);
@@ -77,7 +77,7 @@ test('workshop smelts over time, batches queue in turn', () => {
   assert.equal(s.inventory.pine + s.inventory.oak + s.inventory.ashwood + s.inventory.ironwood, 2);
   assert.throws(() => G.startSmelting(s, 'woodworker', 1, 0));
   s.inventory.twig = 50;
-  assert.throws(() => G.startSmelting(s, 'woodworker', 13, 0));
+  assert.throws(() => G.startSmelting(s, 'woodworker', 4, 0), /at most 3/);
 });
 
 test('craft, equip and lure', () => {

@@ -127,7 +127,7 @@ for (const mat of Object.values(MATERIALS)) ITEMS[mat.id] = { ...mat, kind: 'mat
 // spread = sqrt(totalValue) / SMELT_FALLOFF. At 3 value that gives about
 // 50% tier 1, 35% tier 2, 12% tier 3 and 2% tier 4.
 export const SMELT_FALLOFF = 1.46;
-export const MAX_BATCH = 12;
+export const MAX_BATCH = 3; // pieces per batch
 
 // ---------- Weapons ----------
 // A weapon is made from a material of its family: a Copper Sword, an Oak Bow.
