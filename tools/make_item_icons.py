@@ -200,12 +200,12 @@ for name, rows in ICONS.items():
 sprites = [Image.open(os.path.join(root, 'assets/sprites', f)).convert('RGBA')
            for f in ('archer-lizard.png', 'beetle-knight.png', 'wizard-mouse.png')]
 for size in (192, 512):
-    base = Image.new('RGBA', (96, 96), (52, 84, 54, 255))
-    for x in range(96):
-        for y in range(70, 96):
+    base = Image.new('RGBA', (48, 48), (52, 84, 54, 255))
+    for x in range(48):
+        for y in range(35, 48):
             base.putpixel((x, y), (74, 110, 62, 255))
-    base.alpha_composite(sprites[1], (30, 24))
-    base.alpha_composite(sprites[0], (-6, 26))
-    base.alpha_composite(sprites[2], (40, 28))
+    base.alpha_composite(sprites[1], (16, 12))
+    base.alpha_composite(sprites[0], (-3, 14))
+    base.alpha_composite(sprites[2], (19, 15))
     base.resize((size, size), Image.NEAREST).save(os.path.join(root, f'assets/icons/icon-{size}.png'))
 print('ok')

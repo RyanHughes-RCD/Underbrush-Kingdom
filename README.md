@@ -38,9 +38,9 @@ js/game.js            Pure game logic (no DOM), unit tested
 js/main.js            UI rendering and input
 sw.js                 Service worker for offline play / install
 manifest.webmanifest  PWA manifest ("Add to Home Screen")
-assets/sprites/       64×64 character sprites at native pixel resolution
+assets/sprites/       32×32 8-bit character sprites (10-colour palettes)
 assets/items/         16×16 item icons
-assets/source/        Original high-res sprite art (not deployed)
+assets/source/        Original art: high-res and 64×64 16-bit versions (not deployed)
 tools/                Scripts used to make the art assets
 tests/                Node tests for js/game.js
 ```
@@ -65,8 +65,9 @@ npm test
 
 ## Art pipeline
 
-- `tools/downscale_sprite.py` turns the upscaled sprite art in `assets/source/` back into true 1:1 pixel sprites. Each 7×7 block becomes one pixel, and the white background is made transparent.
+- `tools/downscale_sprite.py` turns the upscaled sprite art in `assets/source/` back into true 1:1, 64×64 pixel sprites. Each 7×7 block becomes one pixel, and the white background is made transparent.
   `python3 tools/downscale_sprite.py <in.png> <out.png> <grid-x-offset> <grid-y-offset>`
+- `tools/make_8bit_sprites.py` makes the 32×32 8-bit game sprites from the 64×64 versions. It halves the resolution, cuts each sprite to a 10-colour palette, and mirrors the beetle so all three face right.
 - `tools/make_item_icons.py` regenerates the item icons and app icons.
 
 When you ship changes, bump `CACHE` in `sw.js` so installed copies update.

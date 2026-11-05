@@ -142,11 +142,11 @@ button { font-family: inherit; font-size: inherit; color: inherit; }
 
 .enc-list { list-style: none; margin: 6px 0 0; padding: 0; font-size: 14px; }
 .enc-list li { display: flex; align-items: center; gap: 6px; padding: 3px 0; border-top: 1px dashed #b9a77d; }
-.enc-list li img { width: 20px; height: 20px; }
+.enc-list li img { width: 32px; height: 32px; }
 .enc-list .win { color: var(--good); font-weight: 600; }
 .enc-list .lose { color: var(--warn); font-weight: 600; }
 .enc-list .pending { color: var(--ink-soft); }
-.party-strip img { width: 48px; height: 48px; margin-right: -8px; }
+.party-strip img { width: 64px; height: 64px; margin-right: -16px; }
 
 /* ---------- Workshops ---------- */
 .ws-head { display: flex; gap: 10px; align-items: center; }
@@ -178,7 +178,7 @@ button { font-family: inherit; font-size: inherit; color: inherit; }
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0;
   font-size: 13px; cursor: pointer; position: relative;
 }
-.tabs button img { width: 40px; height: 40px; filter: grayscale(.8) brightness(.8); }
+.tabs button img { width: 32px; height: 32px; filter: grayscale(.8) brightness(.8); }
 .tabs button.active { color: var(--panel); }
 .tabs button.active img { filter: none; }
 .tabs button .dot {
@@ -205,3 +205,4 @@ button { font-family: inherit; font-size: inherit; color: inherit; }
   padding: 8px 14px; border-radius: 6px; font-size: 14px; max-width: calc(100% - 32px);
 }
 .toast[hidden] { display: none; }
+.modal .sheet .portrait-lg { width: 96px; height: 96px; }

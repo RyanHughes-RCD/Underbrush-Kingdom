@@ -102,7 +102,7 @@ function openCreature(id) {
   const busy = G.isBusy(state, c.id);
   const options = G.freeWeapons(state).filter((x) => WEAPONS[x.type].cls === c.cls);
   openModal(`
-    <div class="row">${sprite(c.cls, '')}<div class="grow">
+    <div class="row">${sprite(c.cls, 'portrait-lg')}<div class="grow">
       <h3>${esc(c.name)}</h3>
       <div class="small">${CLASSES[c.cls].name} · Level ${c.level} · Power ${G.creaturePower(state, c)}</div>
       <div class="small muted">XP ${c.xp}/${G.xpToNext(c.level)}</div>
