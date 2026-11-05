@@ -1,4 +1,5 @@
-"""One-off: builds assets/sprites/sprites.json from the current PNG sprites and item icons.
+"""One-off (historical): built the first version-1 sprites.json from PNG sprites and item icons.
+The current format (version 2, with weapon designs) is documented in js/sprites.js.
 
 sprites.json is the source of truth for character art. It's edited with the
 Sprite Workshop artifact and read by the game at startup.

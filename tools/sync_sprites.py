@@ -3,7 +3,8 @@ regenerates the PNG previews and app icons.
 
 Usage:
   python3 tools/sync_sprites.py <dir>
-where <dir> holds bodies/<id>.json and pieces/<id>.json (one document each,
+where <dir> holds bodies/<id>.json, weapons/<type>.json and pieces/<id>.json
+(one document each,
 as the workshop's database stores them). With no <dir>, only the PNGs are
 regenerated from the existing sprites.json.
 """
@@ -15,7 +16,7 @@ PAD = 8
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SHEET = os.path.join(ROOT, 'assets/sprites/sprites.json')
 FILES = {'archer': 'archer-lizard', 'knight': 'beetle-knight', 'mage': 'wizard-mouse'}
-KEEP = ('name', 'w', 'h', 'palette', 'pixels', 'anchors', 'slot', 'anchor', 'pivot', 'layer', 'wornBy')
+KEEP = ('name', 'w', 'h', 'palette', 'pixels', 'anchors', 'slot', 'anchor', 'pivot', 'layer', 'wornBy', 'swaps', 'variants')
 
 
 def validate(kind, id_, s):
@@ -24,11 +25,21 @@ def validate(kind, id_, s):
     if kind == 'pieces':
         for k in ('slot', 'anchor', 'pivot'):
             assert k in s, f'{kind}/{id_}: missing {k}'
+    if kind == 'weapons':
+        for k in ('anchor', 'pivot'):
+            assert k in s, f'{kind}/{id_}: missing {k}'
+        for i in s.get('swaps', []):
+            assert 0 <= i < len(s['palette']), f'{kind}/{id_}: swap colour {i} not in palette'
+        for mat, v in (s.get('variants') or {}).items():
+            if 'pixels' in v:
+                assert len(v['pixels']) == v['w'] * v['h'], f'{kind}/{id_}/{mat}: pixel count does not match size'
+            for i in (v.get('colors') or {}):
+                assert int(i) < len(s['palette']), f'{kind}/{id_}/{mat}: colour {i} not in palette'
 
 
 def load_docs(d):
-    sheet = {'version': 1, 'bodies': {}, 'pieces': {}}
-    for kind in ('bodies', 'pieces'):
+    sheet = {'version': 2, 'bodies': {}, 'weapons': {}, 'pieces': {}}
+    for kind in ('bodies', 'weapons', 'pieces'):
         folder = os.path.join(d, kind)
         for f in sorted(os.listdir(folder)) if os.path.isdir(folder) else []:
             if not f.endswith('.json'):
@@ -40,7 +51,9 @@ def load_docs(d):
             sheet[kind][id_] = doc
     for cls in FILES:
         assert cls in sheet['bodies'], f'missing body for {cls}'
-    assert os.path.isdir(os.path.join(d, 'pieces')), 'no pieces/ folder: fetch the pieces collection too'
+    assert os.path.isdir(os.path.join(d, 'weapons')), 'no weapons/ folder: fetch the weapons collection too'
+    for t in ('longbow', 'recurve', 'sword', 'mace', 'staff', 'tome'):
+        assert t in sheet['weapons'], f'missing weapon design {t}'
     return sheet
 
 

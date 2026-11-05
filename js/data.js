@@ -12,8 +12,7 @@ export const CLASSES = {
     name: 'Archer Lizard',
     plural: 'Archer Lizards',
     sprite: 'assets/sprites/archer-lizard.png',
-    weapon: 'bow',
-    material: 'wood',
+    weapons: ['longbow', 'recurve'],
     blurb: 'Sharp-eyed and patient. Picks off threats from the tall grass.',
     names: ['Fern', 'Sizzle', 'Ember', 'Basil', 'Copper', 'Rusk', 'Tango', 'Sorrel', 'Pip', 'Cinder', 'Mango', 'Saffron'],
   },
@@ -22,8 +21,7 @@ export const CLASSES = {
     name: 'Beetle Knight',
     plural: 'Beetle Knights',
     sprite: 'assets/sprites/beetle-knight.png',
-    weapon: 'sword',
-    material: 'metal',
+    weapons: ['sword', 'mace'],
     blurb: 'Armoured and stubborn. Charges head-first into anything.',
     names: ['Sir Clover', 'Dame Moss', 'Sir Bramble', 'Dame Ivy', 'Sir Thistle', 'Dame Sage', 'Sir Burdock', 'Dame Juniper', 'Sir Oakley', 'Dame Briar'],
   },
@@ -32,8 +30,7 @@ export const CLASSES = {
     name: 'Wizard Mouse',
     plural: 'Wizard Mice',
     sprite: 'assets/sprites/wizard-mouse.png',
-    weapon: 'staff',
-    material: 'gem',
+    weapons: ['staff', 'tome'],
     blurb: 'Small, clever, and full of strange sparks.',
     names: ['Whisker', 'Nib', 'Mumble', 'Thimble', 'Crumb', 'Pocket', 'Quill', 'Dusk', 'Nutmeg', 'Wisp', 'Button'],
   },
@@ -130,26 +127,33 @@ export const SMELT_FALLOFF = 1.46;
 export const MAX_BATCH = 3; // pieces per batch
 
 // ---------- Weapons ----------
-// A weapon is made from a material of its family: a Copper Sword, an Oak Bow.
+// Each class has two weapon types. A weapon is one type made from one
+// material of that type's family (an Oak Longbow, a Steel Mace). Power comes
+// from the material's tier for now. `stats` will hold each type's own stat
+// distribution (coming soon).
 export const WEAPON_COST = 3;
 export const WEAPONS = {
-  bow:   { id: 'bow',   name: 'Bow',   cls: 'archer', family: 'wood',    icon: 'assets/items/bow.png' },
-  sword: { id: 'sword', name: 'Sword', cls: 'knight', family: 'metal',   icon: 'assets/items/sword.png' },
-  staff: { id: 'staff', name: 'Staff', cls: 'mage',   family: 'crystal', icon: 'assets/items/staff.png' },
+  longbow: { id: 'longbow', name: 'Longbow',     cls: 'archer', family: 'wood',    icon: 'assets/items/bow.png',   stats: null },
+  recurve: { id: 'recurve', name: 'Recurve Bow', cls: 'archer', family: 'wood',    icon: 'assets/items/bow.png',   stats: null },
+  sword:   { id: 'sword',   name: 'Sword',       cls: 'knight', family: 'metal',   icon: 'assets/items/sword.png', stats: null },
+  mace:    { id: 'mace',    name: 'Mace',        cls: 'knight', family: 'metal',   icon: 'assets/items/sword.png', stats: null },
+  staff:   { id: 'staff',   name: 'Staff',       cls: 'mage',   family: 'crystal', icon: 'assets/items/staff.png', stats: null },
+  tome:    { id: 'tome',    name: 'Tome',        cls: 'mage',   family: 'crystal', icon: 'assets/items/staff.png', stats: null },
 };
+export const weaponsFor = (cls) => Object.values(WEAPONS).filter((w) => w.cls === cls);
 
 // Each workshop smelts one kind of scrap into its family's materials.
 export const WORKSHOPS = {
   woodworker: {
-    id: 'woodworker', name: "Woodworker's Cabin", input: 'twig', family: 'wood', weapon: 'bow', minutes: 5,
+    id: 'woodworker', name: "Woodworker's Cabin", input: 'twig', family: 'wood', cls: 'archer', minutes: 5,
     blurb: 'Twigs are whittled, bound and seasoned into timber.',
   },
   forge: {
-    id: 'forge', name: 'The Forge', input: 'bottlecap', family: 'metal', weapon: 'sword', minutes: 5,
+    id: 'forge', name: 'The Forge', input: 'bottlecap', family: 'metal', cls: 'knight', minutes: 5,
     blurb: 'Bottle caps are melted down and hammered into metal.',
   },
   enchanter: {
-    id: 'enchanter', name: "Enchanter's Hut", input: 'pebble', family: 'crystal', weapon: 'staff', minutes: 5,
+    id: 'enchanter', name: "Enchanter's Hut", input: 'pebble', family: 'crystal', cls: 'mage', minutes: 5,
     blurb: 'Ordinary pebbles are coaxed into crystals.',
   },
 };

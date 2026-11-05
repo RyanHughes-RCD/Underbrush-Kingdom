@@ -39,11 +39,11 @@ function fmtMinutes(min) {
 }
 const icon = (id, cls = '') => `<img class="${cls}" src="${(ITEMS[id] || WEAPONS[id]).icon}" alt="${esc((ITEMS[id] || WEAPONS[id]).name)}">`;
 const sprite = (cls, size = 32, c = '') => S.creatureImg(S.creatureArt(cls), size, c);
-const equippedIds = (c) => { const w = G.getWeapon(state, c.weaponId); return w ? [S.weaponPieceId(w.type, w.material)] : []; };
+const equippedIds = (c) => { const w = G.getWeapon(state, c.weaponId); return w ? [{ type: w.type, material: w.material }] : []; };
 const creatureArt = (c) => S.creatureArt(c.cls, equippedIds(c));
 const creatureSprite = (c, size, cls = '') => S.creatureImg(creatureArt(c), size, cls);
 const pieceIcon = (type, material, size = 32) => {
-  const art = S.pieceArt(S.weaponPieceId(type, material));
+  const art = S.weaponArt(type, material);
   return art ? `<img src="${art.url}" alt="" style="width:${size}px;height:${size * art.h / art.w}px">` : icon(type);
 };
 const weaponIcon = (w) => pieceIcon(w.type, w.material);
@@ -149,7 +149,7 @@ function openCreature(id) {
         <div class="weapon-list" style="margin-top:8px">
           ${options.map((o) => `<div class="weapon-row">${weaponIcon(o)}<div class="grow small">${esc(G.weaponName(o))} +${G.weaponPower(o)}</div>
             <button class="btn sm green" data-action="equip" data-id="${c.id}" data-weapon="${o.id}">Equip</button></div>`).join('')
-            || `<p class="small muted">No spare ${WEAPONS[CLASSES[c.cls].weapon].name.toLowerCase()}s in the armory.</p>`}
+            || `<p class="small muted">No spare ${CLASSES[c.cls].weapons.map((t) => WEAPONS[t].name.toLowerCase() + 's').join(' or ')} in the armory.</p>`}
           ${w ? `<button class="btn sm ghost" data-action="equip" data-id="${c.id}" data-weapon="">Unequip</button>` : ''}
         </div>`}
     </div>
@@ -266,7 +266,7 @@ function renderWorkshops() {
       const odds = G.smeltOdds(ws.input, n);
       const jobs = G.workshopJobs(state, ws.id);
       const fam = FAMILIES[ws.family];
-      const wpn = WEAPONS[ws.weapon];
+      const types = CLASSES[ws.cls].weapons.map((t) => WEAPONS[t]);
       const owned = fam.list.filter((m) => state.inventory[m.id] > 0);
       const seen = new Set(state.discovered || []);
       return `
@@ -307,12 +307,12 @@ function renderWorkshops() {
         </div>
 
         <div class="ws-section">
-          <div class="small" style="margin-bottom:6px"><b>Craft a ${wpn.name}</b> <span class="muted">for ${CLASSES[wpn.cls].plural} · ${WEAPON_COST} of one material</span></div>
+          <div class="small" style="margin-bottom:6px"><b>Craft weapons</b> <span class="muted">for ${CLASSES[ws.cls].plural} · ${WEAPON_COST} of one material</span></div>
           ${owned.length ? `<div class="craft-list">${owned.map((m) => {
             const mat = MATERIALS[m.id];
-            return `<button class="btn ghost craft" data-action="craft" data-type="${wpn.id}" data-material="${m.id}" ${G.canCraft(state, wpn.id, m.id) ? 'disabled' : ''}>
-              ${pieceIcon(wpn.id, m.id)}<span class="grow">${esc(mat.name)} ${wpn.name}<br><span class="muted">+${mat.power} power</span></span>
-              <span class="cost">${state.inventory[m.id]}/${WEAPON_COST} ${icon(m.id)}</span></button>`;
+            return `<div class="craft-row"><div class="craft-mat">${icon(m.id)}<span><b>${esc(mat.name)}</b><br><span class="muted">${state.inventory[m.id]}/${WEAPON_COST} · +${mat.power}</span></span></div>
+              ${types.map((wt) => `<button class="btn ghost craft" data-action="craft" data-type="${wt.id}" data-material="${m.id}" ${G.canCraft(state, wt.id, m.id) ? 'disabled' : ''}>
+                ${pieceIcon(wt.id, m.id)}<span>${esc(wt.name)}</span></button>`).join('')}</div>`;
           }).join('')}</div>` : `<p class="small muted">Smelt some ${esc(sc.name.toLowerCase())}s first.</p>`}
         </div>
       </div>`;
@@ -322,14 +322,15 @@ function renderWorkshops() {
 function openMaterial(id) {
   const m = MATERIALS[id];
   const fam = FAMILIES[m.family];
-  const wpn = Object.values(WEAPONS).find((w) => w.family === m.family);
+  const types = Object.values(WEAPONS).filter((w) => w.family === m.family);
   openModal(`
     <div class="row">${icon(m.id, 'mat-lg')}<div class="grow">
       <h3>${esc(m.name)}</h3>
       <div class="small muted">${esc(fam.name.slice(0, -1))} · tier ${m.tier} · ${TIER_NAMES[m.tier - 1]}</div>
     </div></div>
     <p class="small">${esc(m.blurb)}</p>
-    <p class="small">You have <b>${state.inventory[m.id] || 0}</b>. A ${esc(m.name)} ${wpn.name} gives <b>+${m.power}</b> power.</p>
+    <p class="small">You have <b>${state.inventory[m.id] || 0}</b>. ${types.map((t) => `${esc(m.name)} ${t.name}s`).join(' and ')} give <b>+${m.power}</b> power.</p>
+    <div class="row">${types.map((t) => pieceIcon(t.id, m.id, 48)).join('')}</div>
     <button class="btn block ghost" data-action="close">Close</button>`);
 }
 

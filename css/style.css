@@ -246,3 +246,8 @@ button { font-family: inherit; font-size: inherit; color: inherit; }
 .btn.craft .cost { display: inline-flex; align-items: center; gap: 2px; font-size: 13px; font-variant-numeric: tabular-nums; }
 .btn.craft .cost img { width: 24px; height: 24px; }
 .mat-lg { width: 64px; height: 64px; }
+.craft-row { display: grid; grid-template-columns: minmax(0, 1.1fr) 1fr 1fr; gap: 6px; align-items: stretch; }
+.craft-mat { display: flex; align-items: center; gap: 6px; font-size: 13px; min-width: 0; }
+.craft-mat img { width: 24px; height: 24px; }
+.btn.craft { flex-direction: column; justify-content: center; gap: 2px; padding: 4px; font-size: 13px; text-align: center; }
+.btn.craft img { max-height: 40px; width: auto !important; }

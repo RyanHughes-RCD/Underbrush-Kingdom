@@ -1,50 +1,73 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { layout, decode, PAD, weaponPieceId } from '../js/sprites.js';
-import { CLASS_IDS, WEAPONS, MATERIALS } from '../js/data.js';
+import { layout, decode, PAD, weaponSprite, autoColors, variantKind } from '../js/sprites.js';
+import { CLASS_IDS, CLASSES, WEAPONS, FAMILIES } from '../js/data.js';
 
 const sheet = JSON.parse(readFileSync(new URL('../assets/sprites/sprites.json', import.meta.url)));
 
-test('every class has a body and every weapon material has art', () => {
-  for (const cls of CLASS_IDS) assert.ok(sheet.bodies[cls], cls);
-  for (const [type, wt] of Object.entries(WEAPONS)) {
-    for (const mat of Object.values(MATERIALS).filter((m) => m.family === wt.family)) {
-      assert.ok(sheet.pieces[weaponPieceId(type, mat.id, sheet)], `${type} ${mat.id}`);
+test('every class has a body and two weapon types with a design', () => {
+  for (const cls of CLASS_IDS) {
+    assert.ok(sheet.bodies[cls], cls);
+    assert.equal(CLASSES[cls].weapons.length, 2);
+    for (const t of CLASSES[cls].weapons) assert.equal(WEAPONS[t].cls, cls);
+  }
+  for (const t of Object.keys(WEAPONS)) assert.ok(sheet.weapons[t], `design for ${t}`);
+});
+
+test('every weapon type renders in every material of its family', () => {
+  for (const [t, w] of Object.entries(WEAPONS)) {
+    for (const m of FAMILIES[w.family].list) {
+      const sp = weaponSprite(sheet, t, m.id);
+      assert.ok(sp, `${t} ${m.id}`);
+      assert.equal(sp.pixels.length, sp.w * sp.h);
+      assert.equal(decode(sp).length, sp.w * sp.h * 4);
     }
   }
 });
 
-test('weapon art: exact material piece wins, else tier group', () => {
-  assert.equal(weaponPieceId('sword', 'copper', sheet), 'sword-1');
-  assert.equal(weaponPieceId('sword', 'mithril', sheet), 'sword-2');
-  assert.equal(weaponPieceId('sword', 'godsbane', sheet), 'sword-3');
-  const data = { pieces: { ...sheet.pieces, 'sword-steel': sheet.pieces['sword-1'] } };
-  assert.equal(weaponPieceId('sword', 'steel', data), 'sword-steel');
+test('saved recolours win; other materials recolour automatically', () => {
+  const oak = weaponSprite(sheet, 'longbow', 'oak');
+  assert.equal(oak.palette[1], sheet.weapons.longbow.variants.oak.colors['1']);
+  assert.equal(oak.pixels, sheet.weapons.longbow.pixels);
+  assert.equal(variantKind(sheet, 'longbow', 'oak'), 'recolour');
+  assert.equal(variantKind(sheet, 'longbow', 'godwood'), 'auto');
+  const god = weaponSprite(sheet, 'longbow', 'godwood');
+  assert.notEqual(god.palette[1], sheet.weapons.longbow.palette[1]);
+  // Colours that aren't swaps (outline, string) never change.
+  assert.equal(god.palette[0], sheet.weapons.longbow.palette[0]);
 });
 
-test('sprites decode to the right size', () => {
-  for (const s of [...Object.values(sheet.bodies), ...Object.values(sheet.pieces)]) {
-    assert.equal(s.pixels.length, s.w * s.h);
-    assert.equal(decode(s).length, s.w * s.h * 4);
-  }
+test('auto colours spread dark to light over the swap colours', () => {
+  const d = { palette: ['#000000', '#cccccc', '#444444'], swaps: [1, 2] };
+  const c = autoColors(d, 'steel');
+  assert.equal(c[2], '#2c3640'); // darker base colour gets the dark tone
+  assert.equal(c[1], '#d6e2ec');
 });
 
-test('an equipped piece is placed with its pivot on the body anchor', () => {
-  const parts = layout(sheet, 'archer', ['bow-2']);
-  const bow = parts.find((p) => p.id === 'bow-2');
-  const a = sheet.bodies.archer.anchors.hand, pv = sheet.pieces['bow-2'].pivot;
+test('a material with its own design uses its own pixels', () => {
+  const data = structuredClone(sheet);
+  data.weapons.sword.variants.godsbane = { w: 4, h: 2, pixels: '0..00..0', palette: ['#ffffff'], pivot: { x: 1, y: 1 } };
+  const sp = weaponSprite(data, 'sword', 'godsbane');
+  assert.equal(sp.w, 4);
+  assert.equal(variantKind(data, 'sword', 'godsbane'), 'design');
+  assert.equal(weaponSprite(data, 'sword', 'iron').w, sheet.weapons.sword.w);
+});
+
+test('an equipped weapon is placed with its pivot on the body anchor', () => {
+  const parts = layout(sheet, 'archer', [{ type: 'longbow', material: 'oak' }]);
+  const bow = parts.find((p) => p.id === 'longbow:oak');
+  const a = sheet.bodies.archer.anchors.hand, pv = sheet.weapons.longbow.pivot;
   assert.equal(bow.x + pv.x, PAD + a.x);
   assert.equal(bow.y + pv.y, PAD + a.y);
 });
 
-test('worn pieces show by default and an equipped piece replaces one in the same slot', () => {
+test('worn pieces show by default and an equipped weapon replaces one in the same slot', () => {
   const data = structuredClone(sheet);
-  data.pieces['starter-bow'] = { ...data.pieces['bow-1'], wornBy: ['archer'] };
-  data.pieces.hat = { ...data.pieces['bow-1'], slot: 'head', anchor: 'head', layer: 'back', wornBy: ['archer'] };
-  const bare = layout(data, 'archer').map((p) => p.id);
-  assert.deepEqual(bare, ['hat', 'archer', 'starter-bow']);
-  const armed = layout(data, 'archer', ['bow-3']).map((p) => p.id);
-  assert.deepEqual(armed, ['hat', 'archer', 'bow-3']);
+  const art = { w: 2, h: 2, palette: ['#000000'], pixels: '0000', pivot: { x: 0, y: 0 }, anchor: 'hand', layer: 'front' };
+  data.pieces['starter-bow'] = { ...art, slot: 'weapon', wornBy: ['archer'] };
+  data.pieces.hat = { ...art, slot: 'head', anchor: 'head', layer: 'back', wornBy: ['archer'] };
+  assert.deepEqual(layout(data, 'archer').map((p) => p.id), ['hat', 'archer', 'starter-bow']);
+  assert.deepEqual(layout(data, 'archer', [{ type: 'recurve', material: 'pine' }]).map((p) => p.id), ['hat', 'archer', 'recurve:pine']);
   assert.deepEqual(layout(data, 'knight').map((p) => p.id), ['knight']);
 });

@@ -83,11 +83,12 @@ test('workshop smelts over time, batches queue in turn', () => {
 test('craft, equip and lure', () => {
   const s = G.newGame(5);
   s.inventory.pine = 3; s.inventory.steel = 3; s.inventory.oak = 3;
-  const bow = G.craftWeapon(s, 'bow', 'pine');
-  assert.equal(G.weaponName(bow), 'Pine Bow');
-  assert.throws(() => G.craftWeapon(s, 'bow', 'pine'));
-  assert.throws(() => G.craftWeapon(s, 'bow', 'steel'));
-  const sword = G.craftWeapon(s, 'sword', 'steel');
+  const bow = G.craftWeapon(s, 'longbow', 'pine');
+  assert.equal(G.weaponName(bow), 'Pine Longbow');
+  assert.throws(() => G.craftWeapon(s, 'recurve', 'pine'));
+  assert.throws(() => G.craftWeapon(s, 'longbow', 'steel'));
+  const sword = G.craftWeapon(s, 'mace', 'steel');
+  assert.equal(G.weaponName(sword), 'Steel Mace');
   assert.ok(G.weaponPower(sword) > G.weaponPower(bow));
   const archer = s.creatures.find((c) => c.cls === 'archer');
   const knight = s.creatures.find((c) => c.cls === 'knight');
@@ -96,7 +97,7 @@ test('craft, equip and lure', () => {
   G.equipWeapon(s, archer.id, bow.id);
   assert.ok(G.creaturePower(s, archer) > before);
 
-  const bow2 = G.craftWeapon(s, 'bow', 'oak');
+  const bow2 = G.craftWeapon(s, 'recurve', 'oak');
   G.startLure(s, bow2.id, 0);
   G.tick(s, LURE_MINUTES * MIN);
   assert.equal(s.creatures.length, 4);
@@ -117,8 +118,16 @@ test('version 1 saves migrate to tiered materials', () => {
   assert.equal(s.inventory.iron, 1);
   assert.equal(s.inventory.wood, undefined);
   assert.equal(s.weapons[0].material, 'copper');
+  assert.equal(s.weapons[0].type, 'sword');
   G.tick(s, 10);
   assert.equal(s.inventory.iron, 2);
+});
+
+test('version 2 saves: bows become longbows', () => {
+  const v2 = { version: 2, seed: 1, nextId: 3, creatures: [], expeditions: [], lures: [], log: [], jobs: [], discovered: [],
+    inventory: { twig: 0 }, weapons: [{ id: 'w1', type: 'bow', material: 'oak' }, { id: 'w2', type: 'staff', material: 'quartz' }] };
+  const s = G.deserialize(JSON.stringify(v2));
+  assert.deepEqual(s.weapons.map((w) => w.type), ['longbow', 'staff']);
 });
 
 test('save round-trips', () => {

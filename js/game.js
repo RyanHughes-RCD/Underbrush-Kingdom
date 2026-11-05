@@ -8,7 +8,7 @@ import {
   LURE_MINUTES, MAX_ROSTER,
 } from './data.js';
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 const MINUTE = 60 * 1000;
 
 // Debug/testing: multiplies the speed of all timers. Set via ?speed=60.
@@ -371,7 +371,7 @@ const SAVE_KEY = 'underbrush-kingdom-save';
 
 export function serialize(state) { return JSON.stringify(state); }
 
-/** Upgrades older saves. v1 had generic wood/metal/gem and weapon tiers 1-3. */
+/** Upgrades older saves. v1 had generic wood/metal/gem and weapon tiers 1-3; v2 had one weapon type per class. */
 export function migrate(s) {
   if (s.version === 1) {
     const map = { wood: 'wood', metal: 'metal', gem: 'crystal' };
@@ -379,8 +379,9 @@ export function migrate(s) {
       if (s.inventory[old]) s.inventory[materialAt(fam, 1)] = (s.inventory[materialAt(fam, 1)] || 0) + s.inventory[old];
       delete s.inventory[old];
     }
+    const oldFamily = { bow: 'wood', sword: 'metal', staff: 'crystal' };
     for (const w of s.weapons) {
-      w.material = materialAt(WEAPONS[w.type].family, Math.min(10, w.tier || 1));
+      w.material = materialAt(oldFamily[w.type], Math.min(10, w.tier || 1));
       delete w.tier;
     }
     s.jobs = s.jobs.map((j) => {
@@ -388,6 +389,11 @@ export function migrate(s) {
       return { ...j, input: ws.input, count: 3, result: materialAt(ws.family, 1) };
     });
     s.version = 2;
+  }
+  if (s.version === 2) {
+    // v2 had one weapon per class; bows became Longbows (Recurve Bows are new).
+    for (const w of s.weapons) if (w.type === 'bow') w.type = 'longbow';
+    s.version = 3;
   }
   return s;
 }
