@@ -38,6 +38,36 @@ export const CLASSES = {
 
 export const CLASS_IDS = Object.keys(CLASSES);
 
+// ---------- Stats ----------
+// HP, three offensive stats and three defensive stats.
+export const STATS = {
+  hp:  { id: 'hp',  name: 'HP',           short: 'HP',  group: 'vital' },
+  str: { id: 'str', name: 'Strength',     short: 'STR', group: 'offense' },
+  dex: { id: 'dex', name: 'Dexterity',    short: 'DEX', group: 'offense' },
+  int: { id: 'int', name: 'Intelligence', short: 'INT', group: 'offense' },
+  mig: { id: 'mig', name: 'Might',        short: 'MIG', group: 'defense' },
+  spi: { id: 'spi', name: 'Spirit',       short: 'SPI', group: 'defense' },
+  lck: { id: 'lck', name: 'Luck',         short: 'LCK', group: 'defense' },
+};
+export const STAT_IDS = Object.keys(STATS);
+
+// Every fighter of a class has the same stats at the same level:
+// stat = floor(base + growth * (level - 1)).
+export const CLASS_STATS = {
+  archer: {
+    base:   { hp: 20, str: 4, dex: 8, int: 3, mig: 4, spi: 3, lck: 6 },
+    growth: { hp: 4,  str: 1, dex: 2, int: 0.5, mig: 1, spi: 0.5, lck: 1.5 },
+  },
+  knight: {
+    base:   { hp: 28, str: 8, dex: 3, int: 2, mig: 8, spi: 3, lck: 3 },
+    growth: { hp: 6,  str: 2, dex: 0.5, int: 0.5, mig: 2, spi: 0.5, lck: 0.5 },
+  },
+  mage: {
+    base:   { hp: 16, str: 2, dex: 4, int: 9, mig: 3, spi: 7, lck: 4 },
+    growth: { hp: 3,  str: 0.5, dex: 1, int: 2.5, mig: 0.5, spi: 1.5, lck: 1 },
+  },
+};
+
 // ---------- Materials ----------
 // Three families of ten tiers. Workshops smelt scrap into one of these; the
 // tier you get is rolled from the value of the scrap you put in.
@@ -91,14 +121,15 @@ export const FAMILIES = {
   },
 };
 
-// Weapon power by material tier (1-10).
-export const TIER_POWER = [1, 2, 3, 5, 7, 9, 12, 15, 19, 24];
+// Material quality by tier (1-10): multiplies a weapon's base attack and its
+// stat scaling, so better materials hit harder and scale better.
+export const TIER_QUALITY = [1.0, 1.15, 1.3, 1.5, 1.75, 2.0, 2.3, 2.6, 3.0, 3.5];
 export const TIER_NAMES = ['Common', 'Uncommon', 'Uncommon', 'Rare', 'Rare', 'Epic', 'Epic', 'Legendary', 'Legendary', 'Mythic'];
 
 export const MATERIALS = {};
 for (const fam of Object.values(FAMILIES)) {
   fam.list.forEach((mat, i) => {
-    MATERIALS[mat.id] = { ...mat, family: fam.id, tier: i + 1, power: TIER_POWER[i] };
+    MATERIALS[mat.id] = { ...mat, family: fam.id, tier: i + 1, quality: TIER_QUALITY[i] };
   });
 }
 export const materialAt = (family, tier) => FAMILIES[family].list[tier - 1].id;
@@ -128,18 +159,32 @@ export const MAX_BATCH = 3; // pieces per batch
 
 // ---------- Weapons ----------
 // Each class has two weapon types. A weapon is one type made from one
-// material of that type's family (an Oak Longbow, a Steel Mace). Power comes
-// from the material's tier for now. `stats` will hold each type's own stat
-// distribution (coming soon).
+// material of that type's family (an Oak Longbow, a Steel Mace).
+//
+// `attack` is the base attack and `scaling` how much of each wielder stat
+// adds to it, both at material quality 1.0. The material's quality
+// multiplies both:
+//   damage = quality * (attack + sum(scaling[stat] * wielderStat))
+// so a weapon grows stronger as its fighter levels up. In each class one
+// type hits harder early (higher attack) and the other scales better and
+// overtakes it around level 4-5.
 export const WEAPON_COST = 3;
 export const WEAPONS = {
-  longbow: { id: 'longbow', name: 'Longbow',     cls: 'archer', family: 'wood',    icon: 'assets/items/bow.png',   stats: null },
-  recurve: { id: 'recurve', name: 'Recurve Bow', cls: 'archer', family: 'wood',    icon: 'assets/items/bow.png',   stats: null },
-  sword:   { id: 'sword',   name: 'Sword',       cls: 'knight', family: 'metal',   icon: 'assets/items/sword.png', stats: null },
-  mace:    { id: 'mace',    name: 'Mace',        cls: 'knight', family: 'metal',   icon: 'assets/items/sword.png', stats: null },
-  staff:   { id: 'staff',   name: 'Staff',       cls: 'mage',   family: 'crystal', icon: 'assets/items/staff.png', stats: null },
-  tome:    { id: 'tome',    name: 'Tome',        cls: 'mage',   family: 'crystal', icon: 'assets/items/staff.png', stats: null },
+  longbow: { id: 'longbow', name: 'Longbow',     cls: 'archer', family: 'wood',    icon: 'assets/items/bow.png',
+    attack: 7, scaling: { dex: 0.4, str: 0.15 }, blurb: 'Heavy draw and long reach. Hits hard from the first shot.' },
+  recurve: { id: 'recurve', name: 'Recurve Bow', cls: 'archer', family: 'wood',    icon: 'assets/items/bow.png',
+    attack: 5, scaling: { dex: 0.35, lck: 0.35 }, blurb: 'Quick and snappy. Grows deadlier as its archer gets luckier.' },
+  sword:   { id: 'sword',   name: 'Sword',       cls: 'knight', family: 'metal',   icon: 'assets/items/sword.png',
+    attack: 9, scaling: { str: 0.35, dex: 0.2 }, blurb: 'A dependable blade. Strong from the start.' },
+  mace:    { id: 'mace',    name: 'Mace',        cls: 'knight', family: 'metal',   icon: 'assets/items/sword.png',
+    attack: 6, scaling: { str: 0.45, mig: 0.25 }, blurb: 'Heavy and blunt. Hits harder the tougher its wielder becomes.' },
+  staff:   { id: 'staff',   name: 'Staff',       cls: 'mage',   family: 'crystal', icon: 'assets/items/staff.png',
+    attack: 7, scaling: { int: 0.4, spi: 0.1 }, blurb: 'Channels raw intellect into spellfire. Strong from the start.' },
+  tome:    { id: 'tome',    name: 'Tome',        cls: 'mage',   family: 'crystal', icon: 'assets/items/staff.png',
+    attack: 5, scaling: { int: 0.35, spi: 0.35 }, blurb: 'Patient magic that deepens with a calm spirit.' },
 };
+// Scaling letter grades, by effective scaling (after material quality).
+export const GRADES = [[0.9, 'S'], [0.7, 'A'], [0.5, 'B'], [0.3, 'C'], [0.15, 'D'], [0, 'E']];
 export const weaponsFor = (cls) => Object.values(WEAPONS).filter((w) => w.cls === cls);
 
 // Each workshop smelts one kind of scrap into its family's materials.

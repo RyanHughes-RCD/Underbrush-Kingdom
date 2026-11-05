@@ -7,6 +7,7 @@ import {
   ENCOUNTER_MINUTES, MIN_ENCOUNTERS, MAX_ENCOUNTERS, MAX_PARTY,
   LURE_MINUTES, MAX_ROSTER,
 } from './data.js';
+import * as ST from './stats.js';
 
 export const SAVE_VERSION = 3;
 const MINUTE = 60 * 1000;
@@ -88,14 +89,22 @@ export function addCreature(state, cls, weaponId = null) {
 export function getCreature(state, id) { return state.creatures.find((c) => c.id === id); }
 export function getWeapon(state, id) { return state.weapons.find((w) => w.id === id); }
 
-export function weaponPower(w) { return w ? MATERIALS[w.material].power : 0; }
+export function weaponProfile(w) { return ST.weaponProfile(w.type, w.material); }
 export function weaponName(w) { return `${MATERIALS[w.material].name} ${WEAPONS[w.type].name}`; }
 export function weaponTier(w) { return MATERIALS[w.material].tier; }
 export const withArticle = (name) => `${/^[aeiou]/i.test(name) ? 'an' : 'a'} ${name}`;
 
-export function creaturePower(state, c) {
-  return 3 + (c.level - 1) + weaponPower(getWeapon(state, c.weaponId));
+export function creatureStats(c) { return ST.statsAt(c.cls, c.level); }
+
+/** What a fighter hits for with its current weapon (or bare claws). */
+export function creatureDamage(state, c, weapon = getWeapon(state, c.weaponId)) {
+  const stats = creatureStats(c);
+  return weapon ? ST.weaponDamage(weaponProfile(weapon), stats) : ST.unarmedDamage(c.cls, stats);
 }
+
+/** Overall power from stats and weapon damage; used for expedition odds. */
+export function creaturePowerExact(state, c) { return ST.powerOf(creatureStats(c), creatureDamage(state, c)); }
+export function creaturePower(state, c) { return Math.round(creaturePowerExact(state, c) * 10) / 10; }
 
 export function xpToNext(level) { return 3 + level * 2; }
 
@@ -121,7 +130,7 @@ export function encounterDifficulty(exp, index) {
 export function partyScore(state, partyIds, demand) {
   return partyIds.reduce((sum, id) => {
     const c = getCreature(state, id);
-    const p = creaturePower(state, c);
+    const p = creaturePowerExact(state, c);
     return sum + (c.cls === demand ? p * 1.6 : p);
   }, 0);
 }

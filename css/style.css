@@ -251,3 +251,28 @@ button { font-family: inherit; font-size: inherit; color: inherit; }
 .craft-mat img { width: 24px; height: 24px; }
 .btn.craft { flex-direction: column; justify-content: center; gap: 2px; padding: 4px; font-size: 13px; text-align: center; }
 .btn.craft img { max-height: 40px; width: auto !important; }
+
+/* ---------- Stats ---------- */
+.stat-sheet { display: grid; grid-template-columns: auto 1fr 1fr; gap: 6px; align-items: stretch; margin-top: 8px; }
+.stat-group { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; position: relative; padding-top: 16px; }
+.stat-group .glabel { position: absolute; top: 0; left: 2px; font-size: 11px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .6px; }
+.stat-sheet > .stat { margin-top: 16px; }
+.stat {
+  display: flex; flex-direction: column; align-items: center; padding: 4px 6px;
+  background: var(--panel-2); border: 2px solid var(--line); border-radius: 5px; font-variant-numeric: tabular-nums; line-height: 1.1;
+}
+.stat .sname { font-size: 11px; color: var(--ink-soft); }
+.stat b { font-size: 18px; }
+.stat i { font-style: normal; font-size: 11px; color: var(--good); min-height: 1.1em; }
+.stat.vital { background: #f2c9b8; }
+.stat.offense { background: #f3d9b0; }
+.stat.defense { background: #cfe0c0; }
+.ptags { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 2px; justify-content: inherit; }
+.ptag { font-size: 11px; padding: 0 4px; border-radius: 3px; border: 1px solid var(--line); background: var(--panel); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ptag.atk { background: var(--ink); color: var(--panel); }
+.ptag.g-S { background: #e2b33d; } .ptag.g-A { background: #e9c46a; } .ptag.g-B { background: #d4dcae; }
+.ptag.g-C { background: #e3d4ad; } .ptag.g-D, .ptag.g-E { background: #efe6cc; color: var(--ink-soft); }
+.btn.craft .ptags { justify-content: center; }
+.up { color: var(--good); font-weight: 600; } .down { color: var(--warn); font-weight: 600; }
+.stack-list { display: flex; flex-direction: column; gap: 8px; margin: 8px 0; }
+.modal .hint, .card .hint { color: var(--ink-soft); }

@@ -89,7 +89,7 @@ test('craft, equip and lure', () => {
   assert.throws(() => G.craftWeapon(s, 'longbow', 'steel'));
   const sword = G.craftWeapon(s, 'mace', 'steel');
   assert.equal(G.weaponName(sword), 'Steel Mace');
-  assert.ok(G.weaponPower(sword) > G.weaponPower(bow));
+  assert.ok(G.weaponProfile(sword).attack > G.weaponProfile(bow).attack); // steel beats pine
   const archer = s.creatures.find((c) => c.cls === 'archer');
   const knight = s.creatures.find((c) => c.cls === 'knight');
   const before = G.creaturePower(s, archer);

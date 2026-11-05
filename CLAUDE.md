@@ -2,6 +2,11 @@
 
 Static web game with no build step (HTML, CSS and ES modules). `npm test` runs the Node tests. GitHub Pages deploys from `main` through `.github/workflows/pages.yml`.
 
+## Stats
+
+- `STATS`, `CLASS_STATS` (base + growth per level), weapon `attack` and `scaling` in `WEAPONS`, `TIER_QUALITY` and `GRADES` all live in `js/data.js`. The formulas are in `js/stats.js`: stat = floor(base + growth × (level − 1)); damage = quality × (attack + Σ scaling × stat); power = (damage + (MIG + SPI + LCK) / 2 + HP / 4) / 5.
+- Stats are derived from class and level, so they aren't stored in saves. In each class, one weapon has the higher base attack and the other scales better; `tests/stats.test.js` checks that they cross over.
+
 ## Materials and smelting
 
 - `js/data.js` holds `FAMILIES` (metal, wood, crystal; 10 tiers each), `SCRAPS` (each with `value` and `maxTier`), and the odds constants `SMELT_FALLOFF` and `MAX_BATCH` (3 pieces per batch). `smeltOdds()` in `js/game.js` computes the odds: the weight of tier t is exp(-(t-1)² / 2σ²), where σ = √(total value) / SMELT_FALLOFF.
@@ -11,7 +16,7 @@ Static web game with no build step (HTML, CSS and ES modules). `npm test` runs t
 ## Character art
 
 - `assets/sprites/sprites.json` is the source of truth for character art. It holds `bodies` (one per class), `weapons` (one design per weapon type) and `pieces` (armour and other worn gear). Weapons and pieces attach to a body by naming an anchor (`hand`, `offhand`, `head`, `chest`, `back`, …); their `pivot` lands on that anchor. The format is documented at the top of `js/sprites.js`.
-- Weapon types live in `WEAPONS` in `js/data.js`, two per class (longbow/recurve, sword/mace, staff/tome), each with `stats: null` as a placeholder. A weapon design has `swaps` (palette indices that change with the material) and `variants.<material>`, which is either `{colors}` (a recolour) or `{w, h, pixels, palette, pivot}` (its own design). A material with no variant is recoloured automatically from its palette in `data.js`; see `weaponSprite()` in `js/sprites.js`. The Sprite Workshop copies these weapon types and material palettes, so keep the two in step. A piece with `wornBy: [class]` is always drawn on that class. An equipped weapon replaces worn pieces in the same `slot`.
+- Weapon types live in `WEAPONS` in `js/data.js`, two per class (longbow/recurve, sword/mace, staff/tome), each with its own `attack` and `scaling` (see Stats). A weapon design has `swaps` (palette indices that change with the material) and `variants.<material>`, which is either `{colors}` (a recolour) or `{w, h, pixels, palette, pivot}` (its own design). A material with no variant is recoloured automatically from its palette in `data.js`; see `weaponSprite()` in `js/sprites.js`. The Sprite Workshop copies these weapon types and material palettes, so keep the two in step. A piece with `wornBy: [class]` is always drawn on that class. An equipped weapon replaces worn pieces in the same `slot`.
 - `assets/sprites/*.png` are generated previews (used for tab icons and the README). Don't edit them by hand.
 
 ## Syncing from the Sprite Workshop

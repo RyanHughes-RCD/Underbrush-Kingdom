@@ -1,12 +1,13 @@
 // UI layer: renders state into the DOM and wires up taps.
 import {
   CLASSES, CLASS_IDS, ITEMS, WEAPONS, WORKSHOPS, EXPEDITIONS, EXPEDITION_IDS,
-  SCRAPS, MATERIALS, FAMILIES, MAX_BATCH, WEAPON_COST, TIER_NAMES,
+  SCRAPS, MATERIALS, FAMILIES, MAX_BATCH, WEAPON_COST, TIER_NAMES, STATS, STAT_IDS,
   ENCOUNTER_MINUTES, MIN_ENCOUNTERS, MAX_ENCOUNTERS, MAX_PARTY, LURE_MINUTES,
 } from './data.js';
 import * as G from './game.js';
 import { CampScene } from './scene.js';
 import * as S from './sprites.js';
+import * as ST from './stats.js';
 
 const params = new URLSearchParams(location.search);
 if (params.has('speed')) G.setTimeScale(Number(params.get('speed')));
@@ -71,6 +72,24 @@ function renderSatchel() {
   $('#satchel').innerHTML = [...scraps, '<span class="sep"></span>', ...fams].join('');
 }
 
+// ---------- Stats ----------
+
+/** "ATK 9 · STR C · DEX D" for a weapon profile. */
+const profileText = (p) => `ATK ${p.attack} · ${p.scaling.map((x) => `${STATS[x.stat].short} ${x.grade}`).join(' · ')}`;
+const profileTags = (p) => `<span class="ptag atk">ATK ${p.attack}</span>${p.scaling.map((x) => `<span class="ptag g-${x.grade}">${STATS[x.stat].short} ${x.grade}</span>`).join('')}`;
+
+function statBlock(c) {
+  const st = G.creatureStats(c);
+  const gain = ST.nextLevelGain(c.cls, c.level);
+  const cell = (id) => `<div class="stat ${STATS[id].group}"><span class="sname">${STATS[id].short}</span><b>${st[id]}</b>${gain[id] ? `<i>+${gain[id]}</i>` : '<i></i>'}</div>`;
+  return `<div class="stat-sheet">
+      ${cell('hp')}
+      <div class="stat-group"><span class="glabel">Offense</span>${['str', 'dex', 'int'].map(cell).join('')}</div>
+      <div class="stat-group"><span class="glabel">Defense</span>${['mig', 'spi', 'lck'].map(cell).join('')}</div>
+    </div>
+    <p class="hint small" style="margin:4px 0 0">Small numbers show what the next level adds.</p>`;
+}
+
 // ---------- Camp ----------
 
 function creatureCard(c) {
@@ -121,7 +140,7 @@ function renderCamp() {
         return `<div class="weapon-row">${weaponIcon(w)}<div class="grow small">${esc(G.weaponName(w))}<br><span class="muted">A ${CLASSES[l.cls].name} approaches… ${countdown(l.endsAt)}</span></div></div>`;
       }).join('')}</div>` : ''}
       ${free.length ? `<div class="weapon-list" style="margin-top:${lures.length ? 10 : 0}px">${free.map((w) => `
-        <div class="weapon-row">${weaponIcon(w)}<div class="grow small">${esc(G.weaponName(w))} <span class="muted">+${G.weaponPower(w)}</span></div>
+        <div class="weapon-row">${weaponIcon(w)}<div class="grow small">${esc(G.weaponName(w))}<br><span class="muted">${profileText(G.weaponProfile(w))}</span></div>
           <button class="btn sm green" data-action="lure" data-id="${w.id}">Lure</button></div>`).join('')}</div>`
         : (lures.length ? '' : '<p>No spare weapons. Craft some at the Workshops.</p>')}
     </div>
@@ -139,16 +158,19 @@ function openCreature(id) {
   openModal(`
     <div class="row">${creatureSprite(c, 96, 'portrait-lg')}<div class="grow">
       <h3>${esc(c.name)}</h3>
-      <div class="small">${CLASSES[c.cls].name} · Level ${c.level} · Power ${G.creaturePower(state, c)}</div>
+      <div class="small">${CLASSES[c.cls].name} · Level ${c.level}</div>
+      <div class="small">Power <b>${G.creaturePower(state, c)}</b> · Damage <b>${G.creatureDamage(state, c)}</b></div>
       <div class="small muted">XP ${c.xp}/${G.xpToNext(c.level)}</div>
     </div></div>
     <p class="small">${esc(CLASSES[c.cls].blurb)}</p>
+    ${statBlock(c)}
     <div class="ws-section">
-      <div class="small"><b>Weapon:</b> ${w ? `${esc(G.weaponName(w))} (+${G.weaponPower(w)})` : 'Bare claws'}</div>
+      <div class="small"><b>Weapon:</b> ${w ? `${esc(G.weaponName(w))}<div class="ptags">${profileTags(G.weaponProfile(w))}</div>` : `Bare claws <span class="muted">(half ${{ archer: 'DEX', knight: 'STR', mage: 'INT' }[c.cls]})</span>`}</div>
       ${busy ? '<p class="small">Away on an expedition.</p>' : `
         <div class="weapon-list" style="margin-top:8px">
-          ${options.map((o) => `<div class="weapon-row">${weaponIcon(o)}<div class="grow small">${esc(G.weaponName(o))} +${G.weaponPower(o)}</div>
-            <button class="btn sm green" data-action="equip" data-id="${c.id}" data-weapon="${o.id}">Equip</button></div>`).join('')
+          ${options.map((o) => { const d = G.creatureDamage(state, c, o) - G.creatureDamage(state, c); return `<div class="weapon-row">${weaponIcon(o)}<div class="grow small">${esc(G.weaponName(o))}<br><span class="muted">${profileText(G.weaponProfile(o))}</span>
+            <br><span class="${d > 0 ? 'up' : d < 0 ? 'down' : 'muted'}">Damage ${G.creatureDamage(state, c, o)} (${d >= 0 ? '+' : ''}${d})</span></div>
+            <button class="btn sm green" data-action="equip" data-id="${c.id}" data-weapon="${o.id}">Equip</button></div>`; }).join('')
             || `<p class="small muted">No spare ${CLASSES[c.cls].weapons.map((t) => WEAPONS[t].name.toLowerCase() + 's').join(' or ')} in the armory.</p>`}
           ${w ? `<button class="btn sm ghost" data-action="equip" data-id="${c.id}" data-weapon="">Unequip</button>` : ''}
         </div>`}
@@ -310,9 +332,9 @@ function renderWorkshops() {
           <div class="small" style="margin-bottom:6px"><b>Craft weapons</b> <span class="muted">for ${CLASSES[ws.cls].plural} · ${WEAPON_COST} of one material</span></div>
           ${owned.length ? `<div class="craft-list">${owned.map((m) => {
             const mat = MATERIALS[m.id];
-            return `<div class="craft-row"><div class="craft-mat">${icon(m.id)}<span><b>${esc(mat.name)}</b><br><span class="muted">${state.inventory[m.id]}/${WEAPON_COST} · +${mat.power}</span></span></div>
+            return `<div class="craft-row"><div class="craft-mat">${icon(m.id)}<span><b>${esc(mat.name)}</b><br><span class="muted">${state.inventory[m.id]}/${WEAPON_COST} · quality ×${mat.quality}</span></span></div>
               ${types.map((wt) => `<button class="btn ghost craft" data-action="craft" data-type="${wt.id}" data-material="${m.id}" ${G.canCraft(state, wt.id, m.id) ? 'disabled' : ''}>
-                ${pieceIcon(wt.id, m.id)}<span>${esc(wt.name)}</span></button>`).join('')}</div>`;
+                ${pieceIcon(wt.id, m.id)}<span>${esc(wt.name)}</span><span class="ptags">${profileTags(ST.weaponProfile(wt.id, m.id))}</span></button>`).join('')}</div>`;
           }).join('')}</div>` : `<p class="small muted">Smelt some ${esc(sc.name.toLowerCase())}s first.</p>`}
         </div>
       </div>`;
@@ -329,8 +351,8 @@ function openMaterial(id) {
       <div class="small muted">${esc(fam.name.slice(0, -1))} · tier ${m.tier} · ${TIER_NAMES[m.tier - 1]}</div>
     </div></div>
     <p class="small">${esc(m.blurb)}</p>
-    <p class="small">You have <b>${state.inventory[m.id] || 0}</b>. ${types.map((t) => `${esc(m.name)} ${t.name}s`).join(' and ')} give <b>+${m.power}</b> power.</p>
-    <div class="row">${types.map((t) => pieceIcon(t.id, m.id, 48)).join('')}</div>
+    <p class="small">You have <b>${state.inventory[m.id] || 0}</b>. Quality <b>×${m.quality}</b>: weapons made from ${esc(m.name)} multiply their attack and scaling by this.</p>
+    <div class="stack-list">${types.map((t) => `<div class="weapon-row">${pieceIcon(t.id, m.id, 40)}<div class="grow small"><b>${esc(m.name)} ${esc(t.name)}</b><div class="ptags">${profileTags(ST.weaponProfile(t.id, m.id))}</div><span class="muted">${esc(t.blurb)}</span></div></div>`).join('')}</div>
     <button class="btn block ghost" data-action="close">Close</button>`);
 }
 
