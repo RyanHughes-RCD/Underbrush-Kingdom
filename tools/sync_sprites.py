@@ -105,6 +105,7 @@ def main():
     for cls, name in FILES.items():
         composite(sheet, cls).save(os.path.join(ROOT, 'assets/sprites', name + '.png'))
     subprocess.run([sys.executable, '-I', os.path.join(ROOT, 'tools/make_item_icons.py')], check=True)
+    subprocess.run(['node', os.path.join(ROOT, 'tools/make_app_icon.mjs')], check=True)
     print('regenerated sprite PNGs and app icons')
 
 

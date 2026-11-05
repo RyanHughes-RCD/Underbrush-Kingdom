@@ -32,6 +32,7 @@ Static web game with no build step (HTML, CSS and ES modules). `npm test` runs t
 - Weapon types live in `WEAPONS` in `js/data.js`, two per class (longbow/recurve, sword/mace, staff/tome), each with its own `attack` and `scaling` (see Stats). A crafted weapon is `{type, material, accent}`: 2 of a main material from `family` plus 1 fittings material from `accentFamily` (archer wood+metal, knight metal+crystal, mage crystal+wood). Quality = (2·main + fittings) / 3.
 - A weapon design has `swaps` (palette indices that follow the main material), `accentSwaps` and `accents.<material>.colors` (palette indices and saved colours for the fittings), and `variants.<material>`, which is either `{colors}` (a recolour) or `{w, h, pixels, palette, pivot, accentSwaps, accents}` (its own design). A material with no variant is recoloured automatically from its palette in `data.js`; see `weaponSprite()` in `js/sprites.js`. The Sprite Workshop copies these weapon types and material palettes, so keep the two in step. A piece with `wornBy: [class]` is always drawn on that class. An equipped weapon replaces worn pieces in the same `slot`.
 - `assets/sprites/*.png` are generated previews (used for tab icons and the README). Don't edit them by hand.
+- App icons in `assets/icons/` are drawn by `tools/make_app_icon.mjs` (run by `sync_sprites.py`); the manifest lists both `any` and `maskable` icons.
 
 ## Syncing from the Sprite Workshop
 

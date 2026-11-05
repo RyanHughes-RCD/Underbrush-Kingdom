@@ -1,4 +1,4 @@
-"""Generates the 16x16 pixel-art item icons in assets/items/ and app icons in assets/icons/.
+"""Generates the 16x16 pixel-art item icons in assets/items/ (app icons: tools/make_app_icon.mjs).
 
 Run: python3 tools/make_item_icons.py
 """
@@ -228,16 +228,5 @@ for fam_block in re.finditer(r"(\w+): \{\s*id: '(\w+)', name: '[^']+', base: '(\
                     im.putpixel((x, y), mapping[px[:3]] + (255,))
         im.save(os.path.join(root, 'assets/items/materials', mid_ + '.png'))
 
-# App icons: the three heroes on a mossy tile.
-sprites = [Image.open(os.path.join(root, 'assets/sprites', f)).convert('RGBA')
-           for f in ('archer-lizard.png', 'beetle-knight.png', 'wizard-mouse.png')]
-for size in (192, 512):
-    base = Image.new('RGBA', (48, 48), (52, 84, 54, 255))
-    for x in range(48):
-        for y in range(35, 48):
-            base.putpixel((x, y), (74, 110, 62, 255))
-    base.alpha_composite(sprites[1], (16, 12))
-    base.alpha_composite(sprites[0], (-3, 14))
-    base.alpha_composite(sprites[2], (19, 15))
-    base.resize((size, size), Image.NEAREST).save(os.path.join(root, f'assets/icons/icon-{size}.png'))
+# App icons are drawn by tools/make_app_icon.mjs from the sprite data.
 print('ok')
