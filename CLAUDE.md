@@ -10,16 +10,16 @@ Static web game with no build step (HTML, CSS and ES modules). `npm test` runs t
 
 ## Character art
 
-- `assets/sprites/sprites.json` is the source of truth for character art. It holds `bodies` (one per class: archer, knight, mage) and `pieces` (weapons, armour). Pieces attach to a body by naming an anchor (`hand`, `offhand`, `head`, `chest`, `back`, …); a piece's `pivot` lands on that anchor. The format is described in `tools/png_to_sprites_json.py`, and the rendering is `layout()` in `js/sprites.js`.
-- Weapon art maps to piece ids by material: `sword-<material>` if it exists, else `sword-1` (tiers 1-3), `sword-2` (4-6), `sword-3` (7-10). The same goes for `bow-` and `staff-`. See `weaponPieceId()` in `js/sprites.js`. A piece with `wornBy: [class]` is always drawn on that class. An equipped weapon replaces worn pieces in the same `slot`.
+- `assets/sprites/sprites.json` is the source of truth for character art. It holds `bodies` (one per class), `weapons` (one design per weapon type) and `pieces` (armour and other worn gear). Weapons and pieces attach to a body by naming an anchor (`hand`, `offhand`, `head`, `chest`, `back`, …); their `pivot` lands on that anchor. The format is documented at the top of `js/sprites.js`.
+- Weapon types live in `WEAPONS` in `js/data.js`, two per class (longbow/recurve, sword/mace, staff/tome), each with `stats: null` as a placeholder. A weapon design has `swaps` (palette indices that change with the material) and `variants.<material>`, which is either `{colors}` (a recolour) or `{w, h, pixels, palette, pivot}` (its own design). A material with no variant is recoloured automatically from its palette in `data.js`; see `weaponSprite()` in `js/sprites.js`. The Sprite Workshop copies these weapon types and material palettes, so keep the two in step. A piece with `wornBy: [class]` is always drawn on that class. An equipped weapon replaces worn pieces in the same `slot`.
 - `assets/sprites/*.png` are generated previews (used for tab icons and the README). Don't edit them by hand.
 
 ## Syncing from the Sprite Workshop
 
-The user edits sprites in the Sprite Workshop artifact: https://claude.ai/artifact/SGtaz1YMDs5cTKcVrUjBFR (source: `tools/sprite-workshop.html`). Its database has collections `bodies` and `pieces` (one document per sprite, id = sprite id), plus `meta/release`, which the page writes when the user presses "Send to game".
+The user edits sprites in the Sprite Workshop artifact: https://claude.ai/artifact/SGtaz1YMDs5cTKcVrUjBFR (source: `tools/sprite-workshop.html`). Its database has collections `bodies`, `weapons` and `pieces` (one document per sprite or weapon design, id = its key in sprites.json), plus `meta/release`, which the page writes when the user presses "Send to game".
 
 When asked to sync the sprites:
-1. Read both collections with ArtifactData `list` and `out_dir` set to one scratch folder, so you get `<dir>/bodies/*.json` and `<dir>/pieces/*.json`. Page with the cursor if `next_cursor` comes back.
+1. Read all three collections with ArtifactData `list` and `out_dir` set to one scratch folder, so you get `<dir>/bodies/`, `<dir>/weapons/` and `<dir>/pieces/`. Page with the cursor if `next_cursor` comes back.
 2. Run `python3 tools/sync_sprites.py <dir>`. It validates the documents, writes `sprites.json`, and regenerates the PNGs and app icons.
 3. Run `npm test`. Look at the regenerated PNGs, and bump `CACHE` in `sw.js`.
 4. Commit and push.
