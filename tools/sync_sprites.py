@@ -17,7 +17,7 @@ PAD = 8
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SHEET = os.path.join(ROOT, 'assets/sprites/sprites.json')
 FILES = {'archer': 'archer-lizard', 'knight': 'beetle-knight', 'mage': 'wizard-mouse'}
-KEEP = ('name', 'w', 'h', 'palette', 'pixels', 'anchors', 'slot', 'anchor', 'pivot', 'layer', 'wornBy', 'swaps', 'variants', 'accentSwaps', 'accents', 'tints', 'frames', 'fps', 'sceneScale')
+KEEP = ('name', 'w', 'h', 'palette', 'pixels', 'anchors', 'slot', 'anchor', 'pivot', 'layer', 'wornBy', 'swaps', 'variants', 'accentSwaps', 'accents', 'tints', 'frames', 'fps', 'sceneScale', 'overlay')
 
 
 def validate(kind, id_, s):
@@ -25,6 +25,8 @@ def validate(kind, id_, s):
         assert s.get('frames'), f'{kind}/{id_}: no frames'
         for i, f in enumerate(s['frames']):
             assert len(f) == s['w'] * s['h'], f'{kind}/{id_}: frame {i + 1} pixel count does not match size'
+        if s.get('overlay'):
+            assert len(s['overlay']) == s['w'] * s['h'], f'{kind}/{id_}: overlay pixel count does not match size'
         assert len(s['palette']) <= len(CHARS), f'{kind}/{id_}: too many colours'
         return
     assert len(s['pixels']) == s['w'] * s['h'], f'{kind}/{id_}: pixel count does not match size'

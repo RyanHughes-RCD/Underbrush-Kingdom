@@ -270,15 +270,23 @@ function cur(s = sel) {
 }
 // An animated prop shares its size and palette across frames; drawing tools
 // see one frame at a time through this view.
+// Frame -1 is the overlay: a still layer drawn on top of every frame.
+const OVERLAY = -1;
 function frameView(d, f) {
   return {
     get name() { return d.name; }, set name(v) { d.name = v; },
     get w() { return d.w; }, set w(v) { d.w = v; },
     get h() { return d.h; }, set h(v) { d.h = v; },
     get palette() { return d.palette; }, set palette(v) { d.palette = v; },
-    get pixels() { return d.frames[f]; }, set pixels(v) { d.frames[f] = v; },
+    get pixels() { return f === OVERLAY ? (d.overlay || '.'.repeat(d.w * d.h)) : d.frames[f]; },
+    set pixels(v) { if (f === OVERLAY) d.overlay = v; else d.frames[f] = v; },
   };
 }
+// A frame with the overlay drawn on top, as the game shows it.
+function withOverlay(px, ov) { if (!ov) return px; let o = ''; for (let i = 0; i < px.length; i++) o += ov[i] && ov[i] !== '.' ? ov[i] : px[i]; return o; }
+function propComposite(d, f) { return { w: d.w, h: d.h, palette: d.palette, pixels: withOverlay(d.frames[f], d.overlay) }; }
+// Every pixel layer of a prop: its frames, then its overlay if it has one.
+const propLayers = (d) => [...d.frames.map((_, i) => i), ...(d.overlay ? [OVERLAY] : [])];
 const isProp = (s = sel) => s?.kind === 'props';
 
 // ---------- Weapon colours (same rules as js/sprites.js) ----------
@@ -465,7 +473,7 @@ function renderShelfThumbs() {
       const mine = isWeapon() && sel.id === id;
       sp = weaponSprite(id, mine ? sel.mat : (lastMat[id] || FAMILIES[WEAPON_TYPES[id].family][0][0]), mine ? sel.acc : (lastAcc[id] || FAMILIES[WEAPON_TYPES[id].accent][0][0]));
     }
-    else if (kind === 'props') sp = frameView(sheet.props[id], 0);
+    else if (kind === 'props') sp = propComposite(sheet.props[id], 0);
     else sp = sheet[kind][id];
     if (sp) thumb(b.querySelector('canvas'), sp);
   });
@@ -487,7 +495,7 @@ function drawBoard() {
   if (!sp) { $('#board-title').textContent = '—'; c.width = c.height = 10; return; }
   const d = doc();
   $('#board-title').textContent = isWeapon() ? `${MATERIALS[sel.mat].name} ${d.name || WEAPON_TYPES[sel.id].name} · ${MATERIALS[sel.acc].name} fittings`
-    : isProp() ? `${d.name || sel.id} · frame ${sel.frame + 1} of ${d.frames.length}` : (sp.name || sel.id);
+    : isProp() ? (sel.frame === OVERLAY ? `${d.name || sel.id} · overlay (on every frame)` : `${d.name || sel.id} · frame ${sel.frame + 1} of ${d.frames.length}`) : (sp.name || sel.id);
   const wrap = $('#board-wrap');
   const avail = Math.max(200, wrap.clientWidth - 26);
   boardZoom = Math.max(6, Math.min(24, Math.floor(Math.min(avail, 640) / Math.max(sp.w, sp.h))));
@@ -506,12 +514,19 @@ function drawBoard() {
   }
   ctx.imageSmoothingEnabled = false;
   // Onion skin: the previous frame, faintly, to line up the animation.
-  if (isProp() && ui.onion && d.frames.length > 1) {
+  // On the overlay tab, frame 1 shows faintly underneath instead.
+  if (isProp() && sel.frame === OVERLAY) {
+    ctx.globalAlpha = 0.35; ctx.drawImage(spriteCanvas(frameView(d, 0)), 0, 0, sp.w * z, sp.h * z); ctx.globalAlpha = 1;
+  } else if (isProp() && ui.onion && d.frames.length > 1) {
     ctx.globalAlpha = 0.3;
     ctx.drawImage(spriteCanvas(frameView(d, (sel.frame - 1 + d.frames.length) % d.frames.length)), 0, 0, sp.w * z, sp.h * z);
     ctx.globalAlpha = 1;
   }
   ctx.drawImage(spriteCanvas(display()), 0, 0, sp.w * z, sp.h * z);
+  // On a frame, the overlay shows faintly on top so you can see what it covers.
+  if (isProp() && sel.frame !== OVERLAY && d.overlay && ui.showOverlay !== false) {
+    ctx.globalAlpha = 0.45; ctx.drawImage(spriteCanvas(frameView(d, OVERLAY)), 0, 0, sp.w * z, sp.h * z); ctx.globalAlpha = 1;
+  }
   if ($('#opt-grid').checked && z >= 6) {
     ctx.strokeStyle = 'rgba(239,227,194,0.09)'; ctx.lineWidth = 1; ctx.beginPath();
     for (let x = 1; x < sp.w; x++) { ctx.moveTo(x * z + 0.5, 0); ctx.lineTo(x * z + 0.5, sp.h * z); }
@@ -596,7 +611,10 @@ function renderProps() {
       ${sizeRow('Resizing applies to every frame and keeps the bottom centre in place.')}
       <hr>
       <h2>Frames</h2>
-      <div class="row" style="gap:6px">${d.frames.map((_, i) => `<button class="btn sm ${i === sel.frame ? 'on' : ''}" data-frame="${i}" title="Frame ${i + 1} (, and . to step)">${i + 1}</button>`).join('')}</div>
+      <div class="row" style="gap:6px">${d.frames.map((_, i) => `<button class="btn sm ${i === sel.frame ? 'on' : ''}" data-frame="${i}" title="Frame ${i + 1} (, and . to step)">${i + 1}</button>`).join('')}
+        <button class="btn sm ${sel.frame === OVERLAY ? 'on' : ''}" data-frame="${OVERLAY}" title="A still layer drawn on top of every frame">Overlay</button></div>
+      ${sel.frame === OVERLAY ? `<p class="hint">The overlay is drawn on top of every frame and never moves${d.overlay ? '' : '. It is empty: draw on it to add one'}. Frame 1 shows faintly underneath.</p>
+        ${d.overlay ? (ui.confirmDelete ? `<span class="confirm">Clear the overlay? <button class="btn sm danger" id="ov-clear-yes">Clear</button><button class="btn sm" id="fr-del-no">Keep</button></span>` : `<button class="btn sm danger" id="ov-clear">Clear overlay…</button>`) : ''}` : `
       <div class="row">
         <button class="btn sm" id="fr-dup">Duplicate frame ${sel.frame + 1}</button>
         <button class="btn sm" id="fr-left" ${sel.frame === 0 ? 'disabled' : ''}>Move earlier</button>
@@ -604,11 +622,12 @@ function renderProps() {
         ${n > 1 ? (ui.confirmDelete ? `<span class="confirm">Delete frame ${sel.frame + 1}? <button class="btn sm danger" id="fr-del-yes">Delete</button><button class="btn sm" id="fr-del-no">Keep</button></span>` : `<button class="btn sm danger" id="fr-del">Delete frame…</button>`) : ''}
       </div>
       <label class="row" style="gap:6px;font-size:13px"><input type="checkbox" id="pr-onion" ${ui.onion ? 'checked' : ''}> Onion skin (show the previous frame faintly)</label>
+      ${d.overlay ? `<label class="row" style="gap:6px;font-size:13px"><input type="checkbox" id="pr-showov" ${ui.showOverlay !== false ? 'checked' : ''}> Show the overlay faintly on top</label>` : ''}`}
       <div class="row">
         <label class="field">Speed (frames per second)<input type="number" id="pr-fps" min="1" max="24" value="${d.fps || 6}"></label>
         <label class="field">Size in camp<select id="pr-scale">${[[0.5, 'Half (1 pixel = ½ camp pixel)'], [1, 'Full (1 pixel = 1 camp pixel)']].map(([v, t]) => `<option value="${v}" ${(d.sceneScale ?? 0.5) == v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
       </div>
-      <p class="hint">All frames share one palette and size. The fitting room plays the animation.</p>`;
+      <p class="hint">All frames and the overlay share one palette and size. The fitting room plays the animation with the overlay on top.</p>`;
   } else if (isWeapon()) {
     const d = doc(); const t = WEAPON_TYPES[sel.id]; const m = MATERIALS[sel.mat]; const kind = variantKind(sel.id, sel.mat);
     const anchorOpts = new Set([...ANCHOR_NAMES, ...Object.values(sheet.bodies).flatMap((b) => Object.keys(b.anchors || {}))]);
@@ -699,7 +718,7 @@ function drawPreview(t) {
     const d = doc(), f = Math.floor(t * (d.fps || 6)) % d.frames.length;
     if (c.width !== d.w * PV_SCALE || c.height !== d.h * PV_SCALE) { c.width = d.w * PV_SCALE; c.height = d.h * PV_SCALE; c.style.width = `${d.w * PV_SCALE}px`; c.style.height = `${d.h * PV_SCALE}px`; }
     ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, c.width, c.height); ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(spriteCanvas(frameView(d, f)), 0, 0, c.width, c.height);
+    ctx.drawImage(spriteCanvas(propComposite(d, f)), 0, 0, c.width, c.height);
     return;
   }
   const body = sheet.bodies[pvBody]; if (!body) return;
@@ -867,6 +886,8 @@ document.addEventListener('click', (ev) => {
       [d.frames[sel.frame], d.frames[j]] = [d.frames[j], d.frames[sel.frame]]; changed(); select({ ...sel, frame: j });
     } break;
     case 'fr-del': ui.confirmDelete = true; renderProps(); break;
+    case 'ov-clear': ui.confirmDelete = true; renderProps(); break;
+    case 'ov-clear-yes': if (canEdit()) { pushUndo(); delete doc().overlay; ui.confirmDelete = false; changed(); } break;
     case 'fr-del-no': ui.confirmDelete = false; renderProps(); break;
     case 'fr-del-yes': if (canEdit()) { pushUndo(); const d = doc(); d.frames.splice(sel.frame, 1); ui.confirmDelete = false; changed(); renderShelf(); select({ ...sel, frame: Math.min(sel.frame, d.frames.length - 1) }); } break;
     case 'pv-random': {
@@ -887,6 +908,7 @@ document.addEventListener('change', (ev) => {
   if (t.id === 'pv-acc') { if (pvEquip) pvEquip = { ...pvEquip, accent: t.value }; return; }
   if (['opt-grid', 'opt-ghost'].includes(t.id)) { drawBoard(); return; }
   if (t.id === 'pr-onion') { ui.onion = t.checked; drawBoard(); return; }
+  if (t.id === 'pr-showov') { ui.showOverlay = t.checked; drawBoard(); return; }
   if (t.id === 'file-json') { importJson(t.files[0]); t.value = ''; return; }
   const sp = cur(); if (!sp) return;
   if (t.id === 'file-png') { importPng(t.files[0]); t.value = ''; return; }
@@ -929,7 +951,7 @@ document.addEventListener('keydown', (ev) => {
   const k = ev.key.toLowerCase();
   if ((ev.ctrlKey || ev.metaKey) && k === 'z') { ev.preventDefault(); ev.shiftKey ? redo() : undo(); return; }
   if ((ev.ctrlKey || ev.metaKey) && k === 'y') { ev.preventDefault(); redo(); return; }
-  if (isProp() && (k === ',' || k === '.')) { const n = doc().frames.length; select({ ...sel, frame: (sel.frame + (k === ',' ? n - 1 : 1)) % n }); return; }
+  if (isProp() && (k === ',' || k === '.')) { const n = doc().frames.length, f = Math.max(0, sel.frame); select({ ...sel, frame: (f + (k === ',' ? n - 1 : 1)) % n }); return; }
   const map = { b: 'pencil', e: 'eraser', g: 'fill', i: 'picker', m: 'move', a: 'anchor' };
   if (map[k] && !ev.ctrlKey && !ev.metaKey) { tool = map[k]; renderProps(); drawBoard(); }
 });
@@ -944,7 +966,7 @@ function select(s) {
     lastMat[s.id] = s.mat; lastAcc[s.id] = s.acc;
     pvBody = WEAPON_TYPES[s.id].cls; pvEquip = { type: s.id, material: s.mat, accent: s.acc };
   }
-  if (s.kind === 'props') s.frame = Math.max(0, Math.min((s.frame ?? 0), doc(s).frames.length - 1));
+  if (s.kind === 'props' && s.frame !== OVERLAY) s.frame = Math.max(0, Math.min((s.frame ?? 0), doc(s).frames.length - 1));
   if (!(sel && s.kind === sel.kind && s.id === sel.id)) ui.confirmDelete = false;
   sel = s; ui.confirmShared = false;
   const sp = cur();
@@ -971,10 +993,10 @@ function mirror() {
 }
 function tidyPalette() {
   if (isProp()) {
-    const d = doc(); const used = [...new Set(d.frames.flatMap((f) => [...toIdx(frameView(d, d.frames.indexOf(f)))]))].filter((v) => v >= 0).sort((x, y) => x - y);
+    const d = doc(); const used = [...new Set(propLayers(d).flatMap((f) => [...toIdx(frameView(d, f))]))].filter((v) => v >= 0).sort((x, y) => x - y);
     if (used.length === d.palette.length) { toast('Every colour is in use.'); return; }
     pushUndo(); const remap = new Map(used.map((v, i) => [v, i]));
-    d.frames = d.frames.map((_, i) => fromIdx(toIdx(frameView(d, i)).map((v) => (v < 0 ? -1 : remap.get(v)))));
+    for (const f of propLayers(d)) { const v = frameView(d, f); v.pixels = fromIdx(toIdx(v).map((x) => (x < 0 ? -1 : remap.get(x)))); }
     d.palette = used.map((v) => d.palette[v]);
     color = Math.min(color, d.palette.length - 1); changed(); renderShelf(); return;
   }
@@ -989,12 +1011,14 @@ function resize(w, h) {
   if (isProp()) {
     // Every frame, bottom-centre anchored.
     const d = doc(), dx = Math.floor((w - d.w) / 2), dy = h - d.h;
-    d.frames = d.frames.map((_, i) => {
-      const a = toIdx(frameView(d, i)), out = new Int16Array(w * h).fill(-1);
+    const moved = propLayers(d).map((f) => {
+      const a = toIdx(frameView(d, f)), out = new Int16Array(w * h).fill(-1);
       for (let y = 0; y < d.h; y++) for (let x = 0; x < d.w; x++) { const nx = x + dx, ny = y + dy; if (nx >= 0 && ny >= 0 && nx < w && ny < h) out[ny * w + nx] = a[y * d.w + x]; }
-      return fromIdx(out);
+      return [f, fromIdx(out)];
     });
-    d.w = w; d.h = h; changed(); renderShelf(); return;
+    d.w = w; d.h = h;
+    for (const [f, px] of moved) frameView(d, f).pixels = px;
+    changed(); renderShelf(); return;
   }
   const a = toIdx(sp); const out = new Int16Array(w * h).fill(-1);
   // Bodies keep their feet: bottom-centre. Weapons and gear keep their centre.
@@ -1043,8 +1067,8 @@ function importPng(file) {
       if (new Set([...d.palette, ...pal]).size > CHARS.length) { toast(`That would make more than ${CHARS.length} colours across the frames.`); return; }
       pushUndo();
       const merged = [...d.palette]; const map = pal.map((h) => { let k = merged.indexOf(h); if (k < 0) { k = merged.length; merged.push(h); } return k; });
-      d.palette = merged; d.frames[sel.frame] = fromIdx(a.map((v) => (v < 0 ? -1 : map[v])));
-      changed(); renderShelf(); toast(`Imported ${file.name} into frame ${sel.frame + 1}`); return;
+      d.palette = merged; frameView(d, sel.frame).pixels = fromIdx(a.map((v) => (v < 0 ? -1 : map[v])));
+      changed(); renderShelf(); toast(`Imported ${file.name} into ${sel.frame === OVERLAY ? 'the overlay' : `frame ${sel.frame + 1}`}`); return;
     }
     const sp = cur(); pushUndo();
     const ox = sel.kind === 'bodies' ? Math.floor((c.width - sp.w) / 2) : 0, oy = sel.kind === 'bodies' ? c.height - sp.h : 0;
@@ -1091,7 +1115,7 @@ async function save(filename, data) {
 function downloadJson() { save('sprites.json', exportSheet()); }
 function downloadPng() {
   const sp = display(); if (!sp) return;
-  spriteCanvas(sp).toBlob((b) => save(`${isWeapon() ? `${sel.acc}-${sel.mat}-${sel.id}` : isProp() ? `${sel.id}-frame${sel.frame + 1}` : sel.id}.png`, b), 'image/png');
+  spriteCanvas(sp).toBlob((b) => save(`${isWeapon() ? `${sel.acc}-${sel.mat}-${sel.id}` : isProp() ? `${sel.id}-${sel.frame === OVERLAY ? "overlay" : `frame${sel.frame + 1}`}` : sel.id}.png`, b), 'image/png');
 }
 async function sendToGame() {
   if (!db) { toast('Not connected. Download sprites.json and add it to the repo instead.'); return; }

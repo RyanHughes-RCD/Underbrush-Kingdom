@@ -8,9 +8,11 @@
 //   weapons.<type>   one design per weapon type (longbow, mace, tome, ...)
 //   pieces.<id>      other gear: armour, hats, anything worn
 //   props.<id>       animated scenery, e.g. the campfire: {name, w, h,
-//                    palette, frames: [pixels, ...], fps, sceneScale}. All
-//                    frames share the palette and size; sceneScale is how
-//                    big it's drawn in the camp relative to the fighters.
+//                    palette, frames: [pixels, ...], fps, sceneScale,
+//                    overlay}. All frames share the palette and size;
+//                    `overlay` (optional, same size) is a still layer drawn
+//                    on top of every frame, like the needle in the campfire;
+//                    sceneScale is how big it's drawn in the camp.
 //
 // A body defines anchors. A piece or weapon names the anchor it attaches to
 // and its own pivot; it is drawn so its pivot lands on the anchor. Pieces with
@@ -228,12 +230,20 @@ function artFor(key, sprite) {
   return art;
 }
 
-/** One frame of an animated prop as a plain sprite, or null. */
+/** Draws a still overlay over a frame: any non-transparent overlay pixel wins. */
+export function withOverlay(pixels, overlay) {
+  if (!overlay) return pixels;
+  let out = '';
+  for (let i = 0; i < pixels.length; i++) out += overlay[i] && overlay[i] !== '.' ? overlay[i] : pixels[i];
+  return out;
+}
+
+/** One frame of an animated prop (with its overlay) as a plain sprite, or null. */
 export function propFrame(data, id, frame = 0) {
   const p = data?.props?.[id];
   if (!p?.frames?.length) return null;
   const f = ((frame % p.frames.length) + p.frames.length) % p.frames.length;
-  return { w: p.w, h: p.h, palette: p.palette, pixels: p.frames[f] };
+  return { w: p.w, h: p.h, palette: p.palette, pixels: withOverlay(p.frames[f], p.overlay) };
 }
 
 /** All frames of a prop as canvases, for animating. */

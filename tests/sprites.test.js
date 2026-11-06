@@ -113,6 +113,20 @@ test('the campfire prop has six frames sharing one palette and size', async () =
     assert.equal(decode(propFrame(sheet, 'campfire', i)).length, p.w * p.h * 4);
   }
   assert.notEqual(p.frames[0], p.frames[1]);
-  assert.equal(propFrame(sheet, 'campfire', 7).pixels, p.frames[1]); // frames loop
+  assert.equal(propFrame(sheet, 'campfire', 7).pixels, propFrame(sheet, 'campfire', 1).pixels); // frames loop
   assert.equal(propFrame(sheet, 'nothing', 0), null);
+});
+
+test('the campfire needle overlay is the same in every frame', async () => {
+  const { propFrame, withOverlay } = await import('../js/sprites.js');
+  const p = sheet.props.campfire;
+  assert.equal(p.overlay.length, p.w * p.h);
+  const needle = [...p.overlay].map((c, i) => (c !== '.' ? i : -1)).filter((i) => i >= 0);
+  assert.ok(needle.length > 50);
+  for (let f = 0; f < p.frames.length; f++) {
+    const px = propFrame(sheet, 'campfire', f).pixels;
+    for (const i of needle) assert.equal(px[i], p.overlay[i]);
+  }
+  assert.equal(withOverlay('ab', '.c'), 'ac');
+  assert.equal(withOverlay('ab', undefined), 'ab');
 });
