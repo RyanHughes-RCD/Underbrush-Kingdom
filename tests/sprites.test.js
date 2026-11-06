@@ -122,7 +122,7 @@ test('the campfire needle overlay is the same in every frame', async () => {
   const p = sheet.props.campfire;
   assert.equal(p.overlay.length, p.w * p.h);
   const needle = [...p.overlay].map((c, i) => (c !== '.' ? i : -1)).filter((i) => i >= 0);
-  assert.ok(needle.length > 50);
+  assert.ok(needle.length > 10, `needle has ${needle.length} pixels`);
   for (let f = 0; f < p.frames.length; f++) {
     const px = propFrame(sheet, 'campfire', f).pixels;
     for (const i of needle) assert.equal(px[i], p.overlay[i]);

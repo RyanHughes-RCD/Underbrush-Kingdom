@@ -105,9 +105,16 @@ function scene(size) {
     const lit = d < 0.45 ? 2 : d < 0.75 ? 1 : 0;
     set(cv, x, y, hex(joint ? ['#2a221f', '#3a2a22', '#4d3324'][lit] : ['#4a403a', '#6b5444', '#8f6a4c'][lit]));
   }
-  // The fire, feet on the cobbles.
-  const ox = Math.round(cx - sprite.w / 2), oy = Math.round(groundY + 3 - sprite.h);
-  blit(cv, decode(sprite), sprite.w, sprite.h, ox, oy);
+  // The fire, feet on the cobbles, enlarged by a whole number so it stands
+  // about 40-46 pixels tall whatever resolution the campfire art is drawn at.
+  const k = Math.max(1, Math.floor(46 / sprite.h));
+  const rgba = decode(sprite), big = new Uint8ClampedArray(sprite.w * k * sprite.h * k * 4);
+  for (let y = 0; y < sprite.h * k; y++) for (let x = 0; x < sprite.w * k; x++) {
+    const si = (Math.floor(y / k) * sprite.w + Math.floor(x / k)) * 4;
+    big.set(rgba.subarray(si, si + 4), (y * sprite.w * k + x) * 4);
+  }
+  const ox = Math.round(cx - (sprite.w * k) / 2), oy = Math.round(groundY + 3 - sprite.h * k);
+  blit(cv, big, sprite.w * k, sprite.h * k, ox, oy);
   // Sparks rising out of the flames.
   for (const [sx, sy, c] of [[22, 4, '#f2c94c'], [41, 8, '#e0842e'], [19, 14, '#e0842e'], [45, 2, '#f8d988'], [37, 1, '#f2c94c']]) {
     set(cv, o + sx, o + sy, hex(c));
