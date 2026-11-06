@@ -73,6 +73,20 @@ test('harder regions are harder and pay better', () => {
   assert.deepEqual(order, [...order].sort((a, b) => a - b));
 });
 
+test('there are eight regions, each harder and richer than the last', () => {
+  const list = Object.values(REGIONS);
+  assert.equal(list.length, 8);
+  list.forEach((r, i) => assert.equal(r.level, i + 1, r.id));
+  const better = (r) => { const t = Object.values(r.rarity).reduce((a, b) => a + b, 0); return (t - (r.rarity.common || 0)) / t; };
+  for (let i = 1; i < list.length; i++) {
+    const a = list[i - 1], b = list[i];
+    assert.ok(b.baseDifficulty > a.baseDifficulty, `${b.id} harder`);
+    assert.ok(b.bonusFinds >= a.bonusFinds && b.xpPerWin >= a.xpPerWin, `${b.id} pays more`);
+    assert.ok(better(b) > better(a), `${b.id} has rarer scrap`);
+    for (const k of Object.keys(b.loot)) assert.ok(['wood', 'metal', 'crystal'].includes(k));
+  }
+});
+
 test('XP per win comes from the region', () => {
   const s = G.newGame(8);
   const ids = s.creatures.map((c) => c.id);

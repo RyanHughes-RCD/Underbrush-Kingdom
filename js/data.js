@@ -334,6 +334,34 @@ export const REGIONS = {
     loot: { metal: 6, wood: 1, crystal: 1 },
     rarity: { common: 28, uncommon: 28, rare: 22, epic: 13, legendary: 6, mythic: 2.4, divine: 0.6 },
   },
+  shed: {
+    id: 'shed', name: 'Abandoned Garden Shed', level: 5,
+    blurb: 'Rusted tools and rotten shelves. Screws and keys in every corner.',
+    baseDifficulty: 37, bonusFinds: 4, xpPerWin: 4,
+    loot: { metal: 4, wood: 3, crystal: 1 },
+    rarity: { common: 18, uncommon: 24, rare: 24, epic: 17, legendary: 10, mythic: 5, divine: 2 },
+  },
+  warren: {
+    id: 'warren', name: 'Rootdeep Warren', level: 6,
+    blurb: 'Tunnels under the old oak, tangled with ancient roots.',
+    baseDifficulty: 50, bonusFinds: 5, xpPerWin: 5,
+    loot: { wood: 6, crystal: 1, metal: 1 },
+    rarity: { common: 10, uncommon: 18, rare: 24, epic: 22, legendary: 14, mythic: 8, divine: 4 },
+  },
+  greenhouse: {
+    id: 'greenhouse', name: 'Shattered Greenhouse', level: 7,
+    blurb: 'Broken panes glitter in the overgrowth. Watch your step.',
+    baseDifficulty: 65, bonusFinds: 6, xpPerWin: 6,
+    loot: { crystal: 6, metal: 1, wood: 1 },
+    rarity: { common: 5, uncommon: 12, rare: 20, epic: 25, legendary: 20, mythic: 12, divine: 6 },
+  },
+  clocktower: {
+    id: 'clocktower', name: 'The Rusted Clocktower', level: 8,
+    blurb: 'Grinding gears and swinging weights. Only the bravest return.',
+    baseDifficulty: 82, bonusFinds: 7, xpPerWin: 8,
+    loot: { metal: 5, crystal: 2, wood: 1 },
+    rarity: { common: 2, uncommon: 6, rare: 14, epic: 24, legendary: 26, mythic: 18, divine: 10 },
+  },
 };
 export const REGION_IDS = Object.keys(REGIONS);
 

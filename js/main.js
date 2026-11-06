@@ -227,7 +227,7 @@ function demandIcons(type) {
   return Object.entries(counts).sort((a, b) => b[1] - a[1])
     .map(([cls, n]) => `<span class="row small" style="gap:0">${sprite(cls, 32)}×${n}</span>`).join('');
 }
-const pips = (n, max = 4) => `<span class="pips" title="Difficulty ${n} of ${max}">${Array.from({ length: max }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</span>`;
+const pips = (n, max = REGION_IDS.length) => `<span class="pips" title="Difficulty ${n} of ${max}">${Array.from({ length: max }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</span>`;
 const lootIcons = (loot) => Object.entries(loot).sort((a, b) => b[1] - a[1]).map(([fam, w]) => `${icon(scrapsOf(fam)[0])}${w >= 5 ? '' : w <= 1 ? '<span class="muted">(rare)</span>' : ''}`).join(' ');
 /** "Up to Epic · 13% uncommon or better"-style summary of a region's scrap rarity table. */
 function rarityLine(rarity) {

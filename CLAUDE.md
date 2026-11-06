@@ -4,7 +4,7 @@ Static web game with no build step (HTML, CSS and ES modules). `npm test` runs t
 
 ## Expeditions
 
-- An expedition is a party, a type (`EXPEDITION_TYPES` in `js/data.js`: scouting, skirmish, research, excursion; each has its own encounter list with a `demand` class) and a region (`REGIONS`: meadow, thicket, creek, gutter, easiest first; each sets `baseDifficulty`, `bonusFinds`, `xpPerWin`, `loot` family weights and `rarity` weights), plus a number of encounters (10 minutes each).
+- An expedition is a party, a type (`EXPEDITION_TYPES` in `js/data.js`: scouting, skirmish, research, excursion; each has its own encounter list with a `demand` class) and a region (`REGIONS`: meadow, thicket, creek, gutter, shed, warren, greenhouse, clocktower, easiest first; each sets `baseDifficulty`, `bonusFinds`, `xpPerWin`, `loot` family weights and `rarity` weights), plus a number of encounters (10 minutes each).
 - Encounter difficulty = region base + 1.5 × index. Odds and rewards are in `previewExpedition()` / `startExpedition()` in `js/game.js`. Saved expeditions store `type` and `region`.
 
 ## Stats

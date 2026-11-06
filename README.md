@@ -28,6 +28,10 @@ A phone-first web game about a band of tiny heroes living in the underbrush. Col
      | Tangled Thicket | 2 | Wood | Epic | 40% | +1 | 1 |
      | Glimmer Creek | 3 | Crystal | Legendary | 58% | +2 | 2 |
      | Old Gutter Drain | 4 | Metal | Divine | 72% | +3 | 3 |
+     | Abandoned Garden Shed | 5 | Metal and wood | Divine | 82% | +4 | 4 |
+     | Rootdeep Warren | 6 | Wood | Divine | 90% | +5 | 5 |
+     | Shattered Greenhouse | 7 | Crystal | Divine | 95% | +6 | 6 |
+     | The Rusted Clocktower | 8 | Metal | Divine | 98% | +7 | 8 |
 3. **Duration = encounters.** Choose 1–12 encounters, 10 minutes each (6 encounters = 1 hour). Results are revealed one encounter at a time. Later encounters are harder but give more. You can recall a party early and keep what they've already found.
 4. **Scrap and workshops.** Expeditions bring home scrap in seven rarities per family:
 
