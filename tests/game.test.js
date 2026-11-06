@@ -1,18 +1,22 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as G from '../js/game.js';
+import { REGIONS as REGIONS_ALL } from '../js/data.js';
+
+// A new game with every region open, so tests can go anywhere.
+const fresh = (seed) => { const s = G.newGame(seed); s.unlocked = Object.keys(REGIONS_ALL); return s; };
 import { ENCOUNTER_MINUTES, WORKSHOPS, LURE_MINUTES, REGIONS, SCRAPS, SCRAP_RARITY_IDS, scrapsOf } from '../js/data.js';
 
 const MIN = 60 * 1000;
 
 test('new game starts with one fighter of each class', () => {
-  const s = G.newGame(42);
+  const s = fresh(42);
   assert.deepEqual(s.creatures.map((c) => c.cls).sort(), ['archer', 'knight', 'mage']);
   assert.equal(s.inventory.twig, 0);
 });
 
 test('expedition duration is 10 minutes per encounter', () => {
-  const s = G.newGame(1);
+  const s = fresh(1);
   const ids = s.creatures.map((c) => c.id);
   const e = G.startExpedition(s, 'scouting', 'thicket', ids, 6, 0);
   assert.equal(G.expeditionEndsAt(e), 6 * ENCOUNTER_MINUTES * MIN);
@@ -22,14 +26,14 @@ test('expedition duration is 10 minutes per encounter', () => {
 });
 
 test('busy fighters cannot join another expedition', () => {
-  const s = G.newGame(1);
+  const s = fresh(1);
   const [a] = s.creatures;
   G.startExpedition(s, 'research', 'creek', [a.id], 1, 0);
   assert.throws(() => G.startExpedition(s, 'research', 'creek', [a.id], 1, 0));
 });
 
 test('claiming adds loot and frees the party; early return keeps partial loot', () => {
-  const s = G.newGame(7);
+  const s = fresh(7);
   const ids = s.creatures.map((c) => c.id);
   const e = G.startExpedition(s, 'excursion', 'meadow', ids, 4, 0);
   const expected = e.encounters.slice(0, 2).reduce((n, enc) => n + Object.values(enc.loot).reduce((a, b) => a + b, 0), 0);
@@ -42,7 +46,7 @@ test('claiming adds loot and frees the party; early return keeps partial loot', 
 });
 
 test('an expedition needs a type and a region', () => {
-  const s = G.newGame(2);
+  const s = fresh(2);
   const ids = s.creatures.map((c) => c.id);
   assert.throws(() => G.startExpedition(s, 'scouting', null, ids, 2, 0), /region/);
   assert.throws(() => G.startExpedition(s, null, 'meadow', ids, 2, 0), /type/);
@@ -53,7 +57,7 @@ test('an expedition needs a type and a region', () => {
 });
 
 test('the type sets which class is in demand', () => {
-  const s = G.newGame(4);
+  const s = fresh(4);
   const ids = s.creatures.map((c) => c.id);
   const e = G.startExpedition(s, 'scouting', 'meadow', ids, 12, 0);
   const archers = e.encounters.filter((x) => x.demand === 'archer').length;
@@ -61,7 +65,7 @@ test('the type sets which class is in demand', () => {
 });
 
 test('harder regions are harder and pay better', () => {
-  const s = G.newGame(6);
+  const s = fresh(6);
   const ids = s.creatures.map((c) => c.id);
   const easy = G.previewExpedition(s, 'excursion', 'meadow', ids, 6);
   const hard = G.previewExpedition(s, 'excursion', 'gutter', ids, 6);
@@ -87,8 +91,47 @@ test('there are eight regions, each harder and richer than the last', () => {
   }
 });
 
+test('coins: earned per won encounter, spent to unlock regions in order', () => {
+  const s = G.newGame(31);
+  const ids = s.creatures.map((c) => c.id);
+  assert.equal(s.coins, 0);
+  assert.deepEqual(s.unlocked, ['meadow']);
+  assert.throws(() => G.startExpedition(s, 'excursion', 'thicket', ids, 1, 0), /locked/);
+  const e = G.startExpedition(s, 'excursion', 'meadow', ids, 12, 0);
+  const wins = e.encounters.filter((x) => x.success).length;
+  const r = G.claimExpedition(s, e.id, 12 * ENCOUNTER_MINUTES * MIN);
+  assert.equal(r.coins, wins * REGIONS.meadow.coinsPerWin);
+  assert.equal(s.coins, r.coins);
+  // In order only, and only with enough coins.
+  s.coins = 1000;
+  assert.throws(() => G.unlockRegion(s, 'creek'), /Tangled Thicket first/);
+  G.unlockRegion(s, 'thicket');
+  assert.equal(s.coins, 1000 - REGIONS.thicket.unlockCost);
+  assert.ok(G.isUnlocked(s, 'thicket'));
+  assert.throws(() => G.unlockRegion(s, 'thicket'), /already open/);
+  s.coins = 3;
+  assert.throws(() => G.unlockRegion(s, 'creek'), /Needs 50 coins/);
+});
+
+test('every region but the first costs coins, and costs rise', () => {
+  const list = Object.values(REGIONS);
+  assert.equal(list[0].unlockCost, 0);
+  for (let i = 1; i < list.length; i++) {
+    assert.ok(list[i].unlockCost > list[i - 1].unlockCost, list[i].id);
+    assert.ok(list[i].coinsPerWin > list[i - 1].coinsPerWin, list[i].id);
+  }
+});
+
+test('version 8 saves open the first region plus any with a party out', () => {
+  const v8 = { version: 8, seed: 1, nextId: 3, creatures: [], lures: [], log: [], jobs: [], discovered: [], inventory: {}, weapons: [],
+    expeditions: [{ id: 'e1', type: 'skirmish', region: 'gutter', partyIds: [], startedAt: 0, encounterMs: 1, encounters: [] }] };
+  const s = G.deserialize(JSON.stringify(v8));
+  assert.equal(s.coins, 0);
+  assert.deepEqual(s.unlocked, ['meadow', 'gutter']);
+});
+
 test('XP per win comes from the region', () => {
-  const s = G.newGame(8);
+  const s = fresh(8);
   const ids = s.creatures.map((c) => c.id);
   const e = G.startExpedition(s, 'excursion', 'gutter', ids, 3, 0);
   const wins = e.encounters.filter((x) => x.success).length;
@@ -134,7 +177,7 @@ test('every family has seven scrap rarities', () => {
 });
 
 test('smelting results match the odds over many batches', () => {
-  const s = G.newGame(11);
+  const s = fresh(11);
   const counts = {};
   for (let i = 0; i < 4000; i++) {
     s.inventory.bottlecap = 3;
@@ -146,7 +189,7 @@ test('smelting results match the odds over many batches', () => {
 });
 
 test('workshop smelts mixed batches over time, batches queue in turn', () => {
-  const s = G.newGame(3);
+  const s = fresh(3);
   s.inventory.twig = 4; s.inventory.birch_bark = 1;
   const a = G.startSmelting(s, 'woodworker', { twig: 2, birch_bark: 1 }, 0);
   const b = G.startSmelting(s, 'woodworker', { twig: 2 }, 0);
@@ -163,7 +206,7 @@ test('workshop smelts mixed batches over time, batches queue in turn', () => {
 });
 
 test('harder regions find rarer scrap', () => {
-  const s = G.newGame(14);
+  const s = fresh(14);
   const ids = s.creatures.map((c) => c.id);
   const rareShare = (region) => {
     let rare = 0, all = 0;
@@ -191,7 +234,7 @@ test('version 7 saves: pebbles become broken glass', () => {
 });
 
 test('craft, equip and lure', () => {
-  const s = G.newGame(5);
+  const s = fresh(5);
   s.inventory.pine = 2; s.inventory.steel = 2; s.inventory.oak = 2; s.inventory.iron = 2; s.inventory.garnet = 1;
   const bow = G.craftWeapon(s, 'longbow', 'pine', 'iron');
   assert.equal(G.weaponName(bow), 'Iron-bound Pine Longbow');
@@ -251,7 +294,7 @@ test('version 3 saves: weapons get basic fittings', () => {
 });
 
 test('every creature rolls its own traits, and v5 saves get them too', () => {
-  const s = G.newGame(12);
+  const s = fresh(12);
   for (const c of s.creatures) { assert.ok(c.traits?.tint); assert.ok(c.traits.base.hp); }
   const lured = G.addCreature(s, 'mage');
   const twin = G.addCreature(s, 'mage');
@@ -264,7 +307,7 @@ test('every creature rolls its own traits, and v5 saves get them too', () => {
 });
 
 test('save round-trips', () => {
-  const s = G.newGame(9);
+  const s = fresh(9);
   const copy = G.deserialize(G.serialize(s));
   assert.deepEqual(copy, s);
 });

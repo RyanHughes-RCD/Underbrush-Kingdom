@@ -299,7 +299,9 @@ export const EXPEDITION_TYPES = {
 };
 export const EXPEDITION_TYPE_IDS = Object.keys(EXPEDITION_TYPES);
 
-// The REGION sets the difficulty and the rewards. Encounter difficulty is
+// The REGION sets the difficulty and the rewards. Every won encounter pays
+// `coinsPerWin` coins. Regions unlock in order: each costs `unlockCost`
+// coins once the one before it is open (the first is free). Encounter difficulty is
 // `baseDifficulty + 1.5 * encounterIndex`. Each won encounter finds
 // 1-3 scrap, plus one more for every 3 encounters deep, plus `bonusFinds`;
 // fighters gain `xpPerWin` XP per won encounter. Each piece found is rolled
@@ -309,56 +311,56 @@ export const REGIONS = {
   meadow: {
     id: 'meadow', name: 'Windy Meadow', level: 1,
     blurb: 'Open grass and gentle breezes. A good place to start.',
-    baseDifficulty: 5, bonusFinds: 0, xpPerWin: 1,
+    baseDifficulty: 5, bonusFinds: 0, xpPerWin: 1, coinsPerWin: 2, unlockCost: 0,
     loot: { wood: 3, metal: 3, crystal: 3 },
     rarity: { common: 80, uncommon: 17, rare: 3 },
   },
   thicket: {
     id: 'thicket', name: 'Tangled Thicket', level: 2,
     blurb: 'Brambles and fallen branches, thick with twigs.',
-    baseDifficulty: 10, bonusFinds: 1, xpPerWin: 1,
+    baseDifficulty: 10, bonusFinds: 1, xpPerWin: 1, coinsPerWin: 4, unlockCost: 15,
     loot: { wood: 6, metal: 1, crystal: 1 },
     rarity: { common: 60, uncommon: 27, rare: 10, epic: 3 },
   },
   creek: {
     id: 'creek', name: 'Glimmer Creek', level: 3,
     blurb: 'Smooth stones and odd lights along the water.',
-    baseDifficulty: 17, bonusFinds: 2, xpPerWin: 2,
+    baseDifficulty: 17, bonusFinds: 2, xpPerWin: 2, coinsPerWin: 6, unlockCost: 50,
     loot: { crystal: 6, wood: 1, metal: 1 },
     rarity: { common: 42, uncommon: 30, rare: 17, epic: 8, legendary: 3 },
   },
   gutter: {
     id: 'gutter', name: 'Old Gutter Drain', level: 4,
     blurb: 'Rusty, cramped and dangerous. Bottle caps everywhere.',
-    baseDifficulty: 26, bonusFinds: 3, xpPerWin: 3,
+    baseDifficulty: 26, bonusFinds: 3, xpPerWin: 3, coinsPerWin: 9, unlockCost: 105,
     loot: { metal: 6, wood: 1, crystal: 1 },
     rarity: { common: 28, uncommon: 28, rare: 22, epic: 13, legendary: 6, mythic: 2.4, divine: 0.6 },
   },
   shed: {
     id: 'shed', name: 'Abandoned Garden Shed', level: 5,
     blurb: 'Rusted tools and rotten shelves. Screws and keys in every corner.',
-    baseDifficulty: 37, bonusFinds: 4, xpPerWin: 4,
+    baseDifficulty: 37, bonusFinds: 4, xpPerWin: 4, coinsPerWin: 13, unlockCost: 185,
     loot: { metal: 4, wood: 3, crystal: 1 },
     rarity: { common: 18, uncommon: 24, rare: 24, epic: 17, legendary: 10, mythic: 5, divine: 2 },
   },
   warren: {
     id: 'warren', name: 'Rootdeep Warren', level: 6,
     blurb: 'Tunnels under the old oak, tangled with ancient roots.',
-    baseDifficulty: 50, bonusFinds: 5, xpPerWin: 5,
+    baseDifficulty: 50, bonusFinds: 5, xpPerWin: 5, coinsPerWin: 18, unlockCost: 310,
     loot: { wood: 6, crystal: 1, metal: 1 },
     rarity: { common: 10, uncommon: 18, rare: 24, epic: 22, legendary: 14, mythic: 8, divine: 4 },
   },
   greenhouse: {
     id: 'greenhouse', name: 'Shattered Greenhouse', level: 7,
     blurb: 'Broken panes glitter in the overgrowth. Watch your step.',
-    baseDifficulty: 65, bonusFinds: 6, xpPerWin: 6,
+    baseDifficulty: 65, bonusFinds: 6, xpPerWin: 6, coinsPerWin: 24, unlockCost: 470,
     loot: { crystal: 6, metal: 1, wood: 1 },
     rarity: { common: 5, uncommon: 12, rare: 20, epic: 25, legendary: 20, mythic: 12, divine: 6 },
   },
   clocktower: {
     id: 'clocktower', name: 'The Rusted Clocktower', level: 8,
     blurb: 'Grinding gears and swinging weights. Only the bravest return.',
-    baseDifficulty: 82, bonusFinds: 7, xpPerWin: 8,
+    baseDifficulty: 82, bonusFinds: 7, xpPerWin: 8, coinsPerWin: 32, unlockCost: 700,
     loot: { metal: 5, crystal: 2, wood: 1 },
     rarity: { common: 2, uncommon: 6, rare: 14, epic: 24, legendary: 26, mythic: 18, divine: 10 },
   },

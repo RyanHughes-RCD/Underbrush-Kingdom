@@ -404,3 +404,10 @@ button { font-family: inherit; font-size: inherit; color: inherit; }
 @media (prefers-reduced-motion: reduce) { .band-panel, .band-backdrop { transition: none; } }
 
 .tabs { z-index: 6; }
+
+/* ---------- Coins ---------- */
+.satchel .it.coins { color: #ffe27a; font-weight: 600; }
+.coin-i { width: 16px; height: 16px; vertical-align: -3px; }
+.loot-icons .coin-i { width: 20px; height: 20px; }
+.opt.region.locked { cursor: default; background: #d6c9a3; }
+.opt.region.locked b { color: var(--ink-soft); }

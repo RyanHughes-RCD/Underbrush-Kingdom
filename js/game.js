@@ -2,7 +2,7 @@
 // matters) and mutates/returns it. No DOM access here so it can be unit tested.
 
 import {
-  CLASSES, CLASS_IDS, ITEMS, WEAPONS, WORKSHOPS, EXPEDITION_TYPES, REGIONS, SCRAPS, MATERIALS, RARITIES,
+  CLASSES, CLASS_IDS, ITEMS, WEAPONS, WORKSHOPS, EXPEDITION_TYPES, REGIONS, REGION_IDS, SCRAPS, MATERIALS, RARITIES,
   materialAt, SMELT_FALLOFF, SMELT_SHIFT, MAX_BATCH, WEAPON_COST, ACCENT_WORD, scrapAt,
   ENCOUNTER_MINUTES, MIN_ENCOUNTERS, MAX_ENCOUNTERS, MAX_PARTY,
   LURE_MINUTES, MAX_ROSTER,
@@ -10,7 +10,7 @@ import {
 import * as ST from './stats.js';
 import * as PK from './perks.js';
 
-export const SAVE_VERSION = 8;
+export const SAVE_VERSION = 9;
 const MINUTE = 60 * 1000;
 
 // Debug/testing: multiplies the speed of all timers. Set via ?speed=60.
@@ -70,6 +70,8 @@ export function newGame(seed = Date.now()) {
     lures: [],
     log: [],
     discovered: [],
+    coins: 0,
+    unlocked: [REGION_IDS[0]],   // regions open for expeditions
   };
   for (const cls of CLASS_IDS) addCreature(state, cls);
   addLog(state, 'Three brave fighters gather beneath the ferns. The Underbrush Kingdom begins.');
@@ -208,12 +210,36 @@ export function previewExpedition(state, typeId, regionId, partyIds, count) {
     wins += p;
     finds += p * (expectedFinds(region, i) + Math.min(1, fx.party.finds)) + (1 - p) * 0.5;
   }
-  return { expectedWins: wins, avgChance: count ? wins / count : 0, expectedFinds: finds, expectedXp: wins * region.xpPerWin, perks: fx };
+  return { expectedWins: wins, avgChance: count ? wins / count : 0, expectedFinds: finds, expectedXp: wins * region.xpPerWin, expectedCoins: wins * region.coinsPerWin, perks: fx };
+}
+
+// ---------- Coins and region unlocks ----------
+
+export function isUnlocked(state, regionId) { return (state.unlocked || []).includes(regionId); }
+
+/** Why a region can't be unlocked right now, or null if it can. Regions open in order. */
+export function canUnlockRegion(state, regionId) {
+  const r = REGIONS[regionId];
+  if (!r) return 'Unknown region.';
+  if (isUnlocked(state, regionId)) return `${r.name} is already open.`;
+  const prev = REGION_IDS[REGION_IDS.indexOf(regionId) - 1];
+  if (prev && !isUnlocked(state, prev)) return `Unlock ${REGIONS[prev].name} first.`;
+  if ((state.coins || 0) < r.unlockCost) return `Needs ${r.unlockCost} coins (you have ${state.coins || 0}).`;
+  return null;
+}
+
+export function unlockRegion(state, regionId, now = Date.now()) {
+  const err = canUnlockRegion(state, regionId);
+  if (err) throw new Error(err);
+  state.coins -= REGIONS[regionId].unlockCost;
+  state.unlocked.push(regionId);
+  addLog(state, `Paid ${REGIONS[regionId].unlockCost} coins to open the way to ${REGIONS[regionId].name}.`, now);
 }
 
 export function canStartExpedition(state, typeId, regionId, partyIds, count) {
   if (!EXPEDITION_TYPES[typeId]) return 'Choose an expedition type.';
   if (!REGIONS[regionId]) return 'Choose a region.';
+  if (!isUnlocked(state, regionId)) return `${REGIONS[regionId].name} is locked.`;
   if (!partyIds.length) return 'Choose at least one fighter.';
   if (partyIds.length > MAX_PARTY) return `A party can have at most ${MAX_PARTY} fighters.`;
   if (new Set(partyIds).size !== partyIds.length) return 'Duplicate fighter.';
@@ -250,7 +276,7 @@ export function startExpedition(state, typeId, regionId, partyIds, count, now = 
       const item = scrapAt(pickWeighted(rng, region.loot), pickWeighted(rng, region.rarity));
       loot[item] = (loot[item] || 0) + 1;
     }
-    encounters.push({ name: tpl.name, demand: tpl.demand, difficulty, chance, success, loot });
+    encounters.push({ name: tpl.name, demand: tpl.demand, difficulty, chance, success, loot, coins: success ? region.coinsPerWin : 0 });
   }
   const e = {
     id: newId(state, 'e'),
@@ -284,12 +310,14 @@ export function claimExpedition(state, expeditionId, now = Date.now()) {
   const e = state.expeditions[idx];
   const done = encountersDone(e, now);
   const loot = {};
-  let wins = 0;
+  let wins = 0, coins = 0;
   for (const enc of e.encounters.slice(0, done)) {
     if (enc.success) wins++;
+    coins += enc.coins || 0;
     for (const [k, q] of Object.entries(enc.loot)) loot[k] = (loot[k] || 0) + q;
   }
   for (const [k, q] of Object.entries(loot)) state.inventory[k] = (state.inventory[k] || 0) + q;
+  state.coins = (state.coins || 0) + coins;
   state.expeditions.splice(idx, 1);
   const xp = wins * (REGIONS[e.region]?.xpPerWin || 1);
   const present = e.partyIds.filter((id) => getCreature(state, id));
@@ -302,8 +330,8 @@ export function claimExpedition(state, expeditionId, now = Date.now()) {
   });
   const lootText = batchText(loot) || 'nothing';
   const early = done < e.encounters.length ? ' early' : '';
-  addLog(state, `Party returned${early} from ${expeditionName(e.type, e.region)}: ${wins}/${done} encounters won, found ${lootText}.`, now);
-  return { loot, wins, done, xp, xpGiven };
+  addLog(state, `Party returned${early} from ${expeditionName(e.type, e.region)}: ${wins}/${done} encounters won, ${coins} coins, found ${lootText}.`, now);
+  return { loot, wins, done, xp, xpGiven, coins };
 }
 
 // ---------- Workshops (smelting scrap into materials) ----------
@@ -469,7 +497,7 @@ const SAVE_KEY = 'underbrush-kingdom-save';
 
 export function serialize(state) { return JSON.stringify(state); }
 
-/** Upgrades older saves. v1 had generic wood/metal/gem and weapon tiers 1-3; v2 had one weapon type per class; v3 weapons had one material; v4 expeditions were zones, now type + region; v5 creatures had no traits; v6 creatures had no perks; v7 had one scrap per family. */
+/** Upgrades older saves. v1 had generic wood/metal/gem and weapon tiers 1-3; v2 had one weapon type per class; v3 weapons had one material; v4 expeditions were zones, now type + region; v5 creatures had no traits; v6 creatures had no perks; v7 had one scrap per family; v8 had no coins or region unlocks. */
 export function migrate(s) {
   if (s.version === 1) {
     const map = { wood: 'wood', metal: 'metal', gem: 'crystal' };
@@ -530,6 +558,14 @@ export function migrate(s) {
       enc.loot = Object.fromEntries(Object.entries(enc.loot).map(([k, q]) => [rename(k), q]));
     }
     s.version = 8;
+  }
+  if (s.version === 8) {
+    // v8 had no coins and every region was open. The first region is open,
+    // plus any region a party is out in right now.
+    s.coins = s.coins || 0;
+    s.unlocked = [REGION_IDS[0], ...new Set(s.expeditions.map((e) => e.region).filter((r) => r !== REGION_IDS[0]))];
+    s.unlocked.sort((a, b) => REGION_IDS.indexOf(a) - REGION_IDS.indexOf(b));
+    s.version = 9;
   }
   return s;
 }

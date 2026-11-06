@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import { PERKS, PERK_IDS, RARITIES, RARITY_IDS, STAT_IDS, ENCOUNTER_MINUTES } from '../js/data.js';
 import { rollPerks, rollRarity, rarityOdds, partyEffects, selfBonus, perkLines } from '../js/perks.js';
 import * as G from '../js/game.js';
+import { REGIONS as REGIONS_ALL } from '../js/data.js';
+
+// A new game with every region open, so tests can go anywhere.
+const fresh = (seed) => { const s = G.newGame(seed); s.unlocked = Object.keys(REGIONS_ALL); return s; };
 
 const cost = { minor: 1, mid: 2 };
 
@@ -63,7 +67,7 @@ test('perks help the creature and its allies', () => {
 });
 
 test('starters are Common with one minor perk; lured creatures roll a rarity', () => {
-  const s = G.newGame(3);
+  const s = fresh(3);
   for (const c of s.creatures) {
     assert.equal(c.traits.rarity, 'common');
     assert.equal(c.traits.perks.length, 1);
@@ -75,7 +79,7 @@ test('starters are Common with one minor perk; lured creatures roll a rarity', (
 });
 
 test('ally perks raise party odds; party perks add wins, scrap and XP', () => {
-  const s = G.newGame(21);
+  const s = fresh(21);
   const ids = s.creatures.map((c) => c.id);
   s.creatures.forEach((c) => { c.traits.perks = []; });
   const plain = G.previewExpedition(s, 'excursion', 'creek', ids, 6);

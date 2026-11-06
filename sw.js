@@ -1,12 +1,12 @@
 // Offline cache. Bump CACHE when shipping changes so players get the update.
-const CACHE = 'underbrush-v26';
+const CACHE = 'underbrush-v27';
 const ASSETS = [
   './', 'index.html', 'css/style.css', 'manifest.webmanifest',
   'js/main.js', 'js/game.js', 'js/data.js', 'js/scene.js', 'js/sprites.js', 'js/stats.js', 'js/perks.js', 'js/daylight.js', 'js/courtyard.js', 'assets/sprites/sprites.json',
   'assets/sprites/archer-lizard.png', 'assets/sprites/beetle-knight.png', 'assets/sprites/wizard-mouse.png',
   'assets/items/twig.png', 'assets/items/bottlecap.png', 'assets/items/pebble.png',
   'assets/items/wood.png', 'assets/items/metal.png', 'assets/items/gem.png',
-  'assets/items/bow.png', 'assets/items/sword.png', 'assets/items/staff.png',
+  'assets/items/coin.png', 'assets/items/bow.png', 'assets/items/sword.png', 'assets/items/staff.png',
   'assets/icons/icon-192.png', 'assets/icons/icon-512.png', 'assets/icons/maskable-192.png', 'assets/icons/maskable-512.png',
   'assets/icons/apple-touch-icon.png', 'assets/icons/favicon-32.png',
 ];

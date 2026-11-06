@@ -77,7 +77,8 @@ function renderSatchel() {
     const q = f.list.reduce((n, m) => n + (state.inventory[m.id] || 0), 0);
     return `<span class="it ${q ? '' : 'zero'}" title="${esc(f.name)}"><img src="assets/items/${f.base}.png" alt="${esc(f.name)}">${q}</span>`;
   });
-  $('#satchel').innerHTML = [...scraps, '<span class="sep"></span>', ...fams].join('');
+  const coins = `<span class="it coins" title="Coins"><img src="assets/items/coin.png" alt="Coins">${state.coins || 0}</span>`;
+  $('#satchel').innerHTML = [coins, '<span class="sep"></span>', ...scraps, '<span class="sep"></span>', ...fams].join('');
 }
 
 // ---------- Stats ----------
@@ -227,6 +228,7 @@ function demandIcons(type) {
   return Object.entries(counts).sort((a, b) => b[1] - a[1])
     .map(([cls, n]) => `<span class="row small" style="gap:0">${sprite(cls, 32)}×${n}</span>`).join('');
 }
+const coinIcon = () => '<img class="coin-i" src="assets/items/coin.png" alt="coins">';
 const pips = (n, max = REGION_IDS.length) => `<span class="pips" title="Difficulty ${n} of ${max}">${Array.from({ length: max }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</span>`;
 const lootIcons = (loot) => Object.entries(loot).sort((a, b) => b[1] - a[1]).map(([fam, w]) => `${icon(scrapsOf(fam)[0])}${w >= 5 ? '' : w <= 1 ? '<span class="muted">(rare)</span>' : ''}`).join(' ');
 /** "Up to Epic · 13% uncommon or better"-style summary of a region's scrap rarity table. */
@@ -238,8 +240,13 @@ function rarityLine(rarity) {
 }
 
 function renderPlanner() {
-  if (!ui.partyPicked) { ui.party = state.creatures.filter((c) => !G.isBusy(state, c.id)).slice(0, MAX_PARTY).map((c) => c.id); ui.partyPicked = true; }
   ui.party = ui.party.filter((id) => G.getCreature(state, id) && !G.isBusy(state, id));
+  // Fill the party with whoever is free the first time, and again whenever it
+  // ends up empty (say, everyone was away and has just come home).
+  if (!ui.partyPicked || !ui.party.length) {
+    ui.party = state.creatures.filter((c) => !G.isBusy(state, c.id)).slice(0, MAX_PARTY).map((c) => c.id);
+    ui.partyPicked = true;
+  }
   const err = G.canStartExpedition(state, ui.expType, ui.region, ui.party, ui.count);
   const ready = ui.expType && ui.region && ui.party.length;
   const prev = ready ? G.previewExpedition(state, ui.expType, ui.region, ui.party, ui.count) : null;
@@ -251,12 +258,22 @@ function renderPlanner() {
           <button class="opt ${ui.expType === id ? 'on' : ''}" data-action="pick-type" data-id="${id}">
             <b>${esc(t.name)}</b><span class="demands">${demandIcons(t)}</span><span class="small muted">${esc(t.blurb)}</span></button>`; }).join('')}</div>`)}
       ${step(2, `Region${ui.region ? ` · ${esc(REGIONS[ui.region].name)}` : ''}`, ui.region, `
-        <div class="opt-list">${REGION_IDS.map((id) => { const r = REGIONS[id]; return `
+        <div class="opt-list">${REGION_IDS.map((id) => { const r = REGIONS[id];
+          if (!G.isUnlocked(state, id)) {
+            const why = G.canUnlockRegion(state, id), prevLocked = why && /first/.test(why);
+            return `<div class="opt region locked">
+              <span class="row"><b class="grow">${esc(r.name)}</b>${pips(r.level)}</span>
+              <span class="small muted">${esc(r.blurb)}</span>
+              <span class="row small"><span class="grow">${coinIcon()} <b>${r.unlockCost}</b> to unlock · ${r.coinsPerWin} coins per win</span>
+                ${prevLocked ? `<span class="muted">${esc(why)}</span>` : `<button class="btn sm ${why ? '' : 'green'}" data-action="unlock-region" data-id="${id}" ${why ? 'disabled' : ''}>Unlock</button>`}</span>
+            </div>`;
+          }
+          return `
           <button class="opt region ${ui.region === id ? 'on' : ''}" data-action="pick-region" data-id="${id}">
             <span class="row"><b class="grow">${esc(r.name)}</b>${pips(r.level)}</span>
             <span class="small muted">${esc(r.blurb)}</span>
             <span class="small loot-icons">Finds ${lootIcons(r.loot)} ${rarityLine(r.rarity)}</span>
-            <span class="small muted">${r.bonusFinds ? `+${r.bonusFinds} scrap per win` : 'Standard finds'} · ${r.xpPerWin} XP per win</span></button>`; }).join('')}</div>`)}
+            <span class="small muted">${r.bonusFinds ? `+${r.bonusFinds} scrap per win` : 'Standard finds'} · ${r.xpPerWin} XP · ${coinIcon()} ${r.coinsPerWin} per win</span></button>`; }).join('')}</div>`)}
       ${step(3, `Party <span class="muted">(up to ${MAX_PARTY})</span>`, ui.party.length, `
         <div class="picker">
           ${state.creatures.map((c) => {
@@ -276,7 +293,7 @@ function renderPlanner() {
         </div>`)}
       <div class="plan-summary">
         ${prev ? `<b>${esc(G.expeditionName(ui.expType, ui.region))}</b> · ${fmtMinutes(ui.count * ENCOUNTER_MINUTES)}
-          <div class="small">Expected: <b>${prev.expectedWins.toFixed(1)} / ${ui.count}</b> wins (${Math.round(prev.avgChance * 100)}%) · about <b>${Math.round(prev.expectedFinds)}</b> scrap · <b>${Math.round(prev.expectedXp)}</b> XP each</div>
+          <div class="small">Expected: <b>${prev.expectedWins.toFixed(1)} / ${ui.count}</b> wins (${Math.round(prev.avgChance * 100)}%) · about <b>${Math.round(prev.expectedFinds)}</b> scrap · <b>${Math.round(prev.expectedCoins)}</b> coins · <b>${Math.round(prev.expectedXp)}</b> XP each</div>
           ${partyPerkSummary(prev.perks) ? `<div class="small"><b>Party perks:</b> ${esc(partyPerkSummary(prev.perks))}</div>` : ''}`
           : `<span class="small muted">${!ui.expType ? 'Choose a type' : !ui.region ? 'Choose a region' : 'Choose your party'} to see the odds.</span>`}
       </div>
@@ -293,7 +310,7 @@ function activeExpeditionCard(e) {
     if (i < done) {
       return `<li>${sprite(enc.demand, 32)}<span class="grow">${esc(enc.name)}</span>
         <span class="${enc.success ? 'win' : 'lose'}">${enc.success ? 'Won' : 'Fled'}</span>
-        <span class="loot-icons">${lootText(enc.loot)}</span></li>`;
+        <span class="loot-icons">${enc.coins ? `${coinIcon()}${enc.coins} ` : ''}${lootText(enc.loot)}</span></li>`;
     }
     if (i === done) return `<li class="pending">⋯ Encounter ${i + 1} in progress (${countdown(e.startedAt + (i + 1) * e.encounterMs)})</li>`;
     return '';
@@ -524,7 +541,8 @@ document.addEventListener('click', (ev) => {
       break;
     case 'lure': act(() => { G.startLure(state, id); toast('The weapon gleams at the Lure Post…'); }); break;
     case 'pick-type': ui.expType = id; render(); break;
-    case 'pick-region': ui.region = id; render(); break;
+    case 'pick-region': if (G.isUnlocked(state, id)) { ui.region = id; render(); } break;
+    case 'unlock-region': act(() => { G.unlockRegion(state, id); ui.region = id; toast(`${REGIONS[id].name} is open!`); }); break;
     case 'toggle-party':
       ui.party = ui.party.includes(id) ? ui.party.filter((x) => x !== id)
         : ui.party.length < MAX_PARTY ? [...ui.party, id] : ui.party;
@@ -538,7 +556,7 @@ document.addEventListener('click', (ev) => {
       act(() => { G.startExpedition(state, ui.expType, ui.region, ui.party, ui.count); ui.party = []; ui.partyPicked = false; });
       view.scrollTop = 0;
       break;
-    case 'claim': act(() => { const r = G.claimExpedition(state, id); toast(`Won ${r.wins}/${r.done} encounters!`); }); break;
+    case 'claim': act(() => { const r = G.claimExpedition(state, id); toast(`Won ${r.wins}/${r.done} encounters · +${r.coins} coins`); }); break;
     case 'recall':
       if (confirm('Recall this party now? They keep loot from finished encounters only.')) act(() => G.claimExpedition(state, id));
       break;
