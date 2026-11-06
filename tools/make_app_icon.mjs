@@ -1,6 +1,7 @@
-// Draws the app icon from the game's own sprite data: a portrait headshot
-// of the Wizard Mouse against a pale moon, framed by dark leaves. Pixel art
-// at a low resolution, scaled up by whole numbers.
+// Draws the app icon from the game's own sprite data: the campfire (its
+// first frame, without the needle overlay) glowing at night on a ring of
+// cobblestones, with sparks rising. Pixel art at a low resolution, scaled
+// up by whole numbers.
 //
 // Run: node tools/make_app_icon.mjs
 // Writes assets/icons/: icon-512.png, icon-192.png (any purpose),
@@ -76,94 +77,40 @@ function png(cv) {
 
 function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 
-const SKY = ['#16281a', '#1c3321', '#233f27'];
-const LEAF = ['#132313', '#1f3d24', '#2b5e30', '#3f8239', '#5fa043'];
-const GRASS = ['#3e7230', '#4a8336', '#55913e', '#62a046'];
-
-function tree(cv, cx, baseY, r, rand) {
-  // Trunk, then a round canopy shaded from the top-left, then an outline.
-  for (let y = baseY - r; y <= baseY; y++) for (let x = cx - 1; x <= cx + 1; x++) set(cv, x, y, hex(x === cx - 1 ? '#3a2416' : '#5c3a22'));
-  const cy = baseY - r - Math.round(r * 0.6);
-  const filled = new Set();
-  for (let y = cy - r; y <= cy + r; y++) for (let x = cx - r; x <= cx + r; x++) {
-    const d = Math.hypot(x - cx, (y - cy) * 1.1);
-    if (d > r + (rand() - 0.5) * 1.2) continue;
-    const light = (-(x - cx) * 0.6 - (y - cy)) / r + (rand() - 0.5) * 0.6;
-    set(cv, x, y, hex(LEAF[Math.max(1, Math.min(4, Math.round(2 + light * 1.4)))]));
-    filled.add(`${x},${y}`);
-  }
-  for (const k of filled) {
-    const [x, y] = k.split(',').map(Number);
-    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (!filled.has(`${x + dx},${y + dy}`)) set(cv, x + dx, y + dy, hex(LEAF[0]));
-  }
-}
-
-// The headshot: this part of the Wizard Mouse body (hood, ears, face and
-// shoulders), drawn at PORTRAIT_SCALE logical pixels per sprite pixel.
-const CROP = { x: 8, y: 4, w: 17, h: 17 };
-const PORTRAIT_SCALE = 3;
-
-function leafCluster(cv, cx, cy, r, rand) {
-  const filled = new Set();
-  for (let y = cy - r; y <= cy + r; y++) for (let x = cx - r; x <= cx + r; x++) {
-    if (Math.hypot(x - cx, y - cy) > r + (rand() - 0.5) * 1.5) continue;
-    const light = (-(x - cx) * 0.5 - (y - cy)) / r + (rand() - 0.5) * 0.7;
-    set(cv, x, y, hex(LEAF[Math.max(1, Math.min(3, Math.round(1.6 + light * 1.2)))]));
-    filled.add(`${x},${y}`);
-  }
-  for (const k of filled) {
-    const [x, y] = k.split(',').map(Number);
-    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (!filled.has(`${x + dx},${y + dy}`)) set(cv, x + dx, y + dy, hex(LEAF[0]));
-  }
-}
+// Which campfire frame the icon shows. The needle lives in the prop's
+// overlay, so drawing a frame on its own leaves it out.
+const FIRE_FRAME = 0;
 
 // Draws the icon at `size` logical pixels; the 64-pixel artwork is centred,
 // so a larger size just adds more background around it (for maskable icons).
 function scene(size) {
-  const cv = canvas(size, size), rand = rng(20261106), o = (size - 64) / 2;
-  const cx = size / 2, cy = o + 29;
-  // Dusky forest backdrop, a little lighter toward the moon.
+  const cv = canvas(size, size), o = (size - 64) / 2;
+  const fire = sheet.props.campfire;
+  const sprite = { w: fire.w, h: fire.h, palette: fire.palette, pixels: fire.frames[FIRE_FRAME] };
+  const cx = size / 2, groundY = o + 56, glowY = o + 34;
+  // Night sky, a touch lighter low down where the fire lights the air.
   for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-    const d = Math.hypot(x - cx, y - cy);
-    set(cv, x, y, hex(d < 31 ? '#233f27' : d < 40 ? '#1c3321' : '#16281a'));
+    const d = Math.hypot(x - cx, (y - glowY) * 1.1);
+    set(cv, x, y, hex(d < 20 ? '#5a2a1e' : d < 27 ? '#3d1f1c' : d < 35 ? '#2a1a20' : d < 44 ? '#1c1622' : '#141220'));
   }
-  // The moon: a pale disc with a darker rim, dithered at the edge.
+  // A few stars, kept away from the glow.
+  for (const [sx, sy] of [[7, 7], [15, 4], [52, 6], [58, 15], [5, 20], [46, 3], [60, 27], [3, 33]]) {
+    set(cv, o + sx, o + sy, hex('#e9e4ff')); set(cv, o + sx + 1, o + sy, hex('#8f88b8'), 120);
+  }
+  // Cobbled ground ring under the fire, lit warm near the middle.
   for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-    const d = Math.hypot(x - cx, (y - cy) * 1.02);
-    if (d < 26) set(cv, x, y, hex(d < 21 ? '#f4e3a6' : d < 24 ? '#e9cf84' : '#d2b067'));
-    else if (d < 27 && (x + y) % 2 === 0) set(cv, x, y, hex('#d2b067'));
+    const d = Math.hypot((x - cx) / 28, (y - groundY) / 9);
+    if (d > 1) continue;
+    const joint = x % 3 === 0 || y % 2 === 0;
+    const lit = d < 0.45 ? 2 : d < 0.75 ? 1 : 0;
+    set(cv, x, y, hex(joint ? ['#2a221f', '#3a2a22', '#4d3324'][lit] : ['#4a403a', '#6b5444', '#8f6a4c'][lit]));
   }
-  for (const [mx, my, mr] of [[-14, -10, 2], [12, -15, 1.5], [17, 2, 2.5], [-17, 8, 1.5]]) {   // craters
-    for (let y = -3; y <= 3; y++) for (let x = -3; x <= 3; x++) if (Math.hypot(x, y) <= mr) set(cv, cx + mx + x, cy + my + y, hex('#e4c97c'));
-  }
-  // Leaves framing the corners and edges.
-  const leaves = [[-3, -3, 8], [8, -5, 5], [size + 1, -2, 8], [size - 10, -5, 5], [-5, size - 5, 9], [size + 4, size - 6, 9]];
-  for (const [x, y, r] of leaves) leafCluster(cv, x, y, r, rand);
-  // Fireflies.
-  for (const [fx, fy] of [[o + 9, o + 14], [o + 55, o + 11], [o + 6, o + 40], [o + 58, o + 36], [o + 48, o + 52], [o + 13, o + 55]]) {
-    set(cv, fx, fy, hex('#fff3a0')); set(cv, fx + 1, fy, hex('#f2c94c'), 120); set(cv, fx - 1, fy, hex('#f2c94c'), 120);
-    set(cv, fx, fy + 1, hex('#f2c94c'), 120); set(cv, fx, fy - 1, hex('#f2c94c'), 120);
-  }
-  // The mouse, cropped to its head and shoulders and enlarged. The bust runs
-  // off the bottom edge of the 64-pixel art, like a portrait.
-  const body = sheet.bodies.mage, rgba = decode(body);
-  const pw = CROP.w * PORTRAIT_SCALE, ph = CROP.h * PORTRAIT_SCALE;
-  const ox = Math.round(cx - pw / 2) + 1, oy = o + 64 - ph;
-  // A soft dark outline around the silhouette so it stands off the moon.
-  const at = (x, y) => x >= 0 && y >= 0 && x < body.w && y < body.h && rgba[(y * body.w + x) * 4 + 3];
-  for (let y = 0; y < CROP.h; y++) for (let x = 0; x < CROP.w; x++) {
-    const sx = CROP.x + x, sy = CROP.y + y;
-    if (at(sx, sy)) continue;
-    if (at(sx + 1, sy) || at(sx - 1, sy) || at(sx, sy + 1) || at(sx, sy - 1)) {
-      for (let ky = 0; ky < PORTRAIT_SCALE; ky++) for (let kx = 0; kx < PORTRAIT_SCALE; kx++) set(cv, ox + x * PORTRAIT_SCALE + kx, oy + y * PORTRAIT_SCALE + ky, [10, 8, 16], 150);
-    }
-  }
-  for (let y = 0; y < CROP.h; y++) for (let x = 0; x < CROP.w; x++) {
-    const i = ((CROP.y + y) * body.w + CROP.x + x) * 4;
-    if (!rgba[i + 3]) continue;
-    for (let ky = 0; ky < PORTRAIT_SCALE; ky++) for (let kx = 0; kx < PORTRAIT_SCALE; kx++) {
-      set(cv, ox + x * PORTRAIT_SCALE + kx, oy + y * PORTRAIT_SCALE + ky, [rgba[i], rgba[i + 1], rgba[i + 2]]);
-    }
+  // The fire, feet on the cobbles.
+  const ox = Math.round(cx - sprite.w / 2), oy = Math.round(groundY + 3 - sprite.h);
+  blit(cv, decode(sprite), sprite.w, sprite.h, ox, oy);
+  // Sparks rising out of the flames.
+  for (const [sx, sy, c] of [[22, 4, '#f2c94c'], [41, 8, '#e0842e'], [19, 14, '#e0842e'], [45, 2, '#f8d988'], [37, 1, '#f2c94c']]) {
+    set(cv, o + sx, o + sy, hex(c));
   }
   return cv;
 }
