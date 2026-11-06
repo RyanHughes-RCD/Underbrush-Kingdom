@@ -358,3 +358,14 @@ button { font-family: inherit; font-size: inherit; color: inherit; }
 .slot { width: 40px; height: 40px; border: 2px dashed #b9a77d; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; background: var(--panel); flex: 0 0 auto; }
 .slot.full { border-style: solid; border-color: var(--line); background: #f0c46a; cursor: pointer; padding: 0; }
 .slot img { width: 32px; height: 32px; }
+
+/* ---------- Day and night ---------- */
+.scene { position: relative; }
+.scene-time {
+  position: absolute; left: 8px; top: 8px; padding: 2px 8px; border-radius: 999px;
+  background: rgba(18, 27, 20, .72); color: var(--panel); font-size: 12px; line-height: 1.6;
+  border: 1px solid rgba(239, 227, 194, .25); pointer-events: none; font-variant-numeric: tabular-nums;
+}
+.scene-time[data-phase="night"] { color: #c9d4ff; }
+.scene-time[data-phase="dawn"] { color: #ffc9b8; }
+.scene-time[data-phase="dusk"] { color: #ffc98a; }

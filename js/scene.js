@@ -4,6 +4,7 @@
 
 import { mulberry32 } from './game.js';
 import { PAD, propArt } from './sprites.js';
+import { lightAt, hourNow, clockText } from './daylight.js';
 
 const SCENE_H = 160;         // logical pixels tall
 const TARGET_W = 190;        // roughly how many logical pixels wide
@@ -99,6 +100,10 @@ export class CampScene {
     this.el.className = 'scene';
     this.canvas = document.createElement('canvas');
     this.el.appendChild(this.canvas);
+    // Time of day, e.g. "Dusk · 6:42 pm".
+    this.label = document.createElement('div');
+    this.label.className = 'scene-time';
+    this.el.appendChild(this.label);
     this.ctx = this.canvas.getContext('2d');
     this.walkers = new Map();
     this.running = false;
@@ -313,6 +318,8 @@ export class CampScene {
     const fireAt = this.fireSpot();
     const fireFrame = fire ? Math.floor(t * fire.fps) % fire.frames.length : 0;
     if (fire) this.drawGlow(fireAt, t, fireFrame);
+    const hour = hourNow();
+    const light = lightAt(hour);
 
     const things = [
       ...this.trees.map((tr) => ({ y: tr.y, tree: tr })),
@@ -320,6 +327,7 @@ export class CampScene {
       ...(fire ? [{ y: fireAt.y, fire: true }] : []),
     ].sort((a, b) => a.y - b.y);
 
+    let fireRect = null;
     for (const th of things) {
       if (th.fire) {
         // Drawn at its own pixel density: sceneScale 0.5 means each campfire
@@ -327,7 +335,8 @@ export class CampScene {
         // the fighters. Rounded to whole device pixels to stay crisp.
         const px = Math.max(1, Math.round(s * fire.sceneScale));
         const fw = fire.w * px, fh = fire.h * px;
-        ctx.drawImage(fire.frames[fireFrame], Math.round(fireAt.x * s - fw / 2), Math.round(fireAt.y * s - fh), fw, fh);
+        fireRect = [fire.frames[fireFrame], Math.round(fireAt.x * s - fw / 2), Math.round(fireAt.y * s - fh), fw, fh];
+        ctx.drawImage(...fireRect);
         continue;
       }
       if (th.tree) {
@@ -354,6 +363,62 @@ export class CampScene {
       ctx.translate(fx, fy);
       ctx.scale(w.facing * sx * s, sy * s);
       ctx.drawImage(art.canvas, -(PAD + art.w / 2), -(PAD + art.h) + 1);
+      ctx.restore();
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.drawDaylight(light, t, fireAt, fireRect, fireFrame);
+    const text = `${light.phase.name} · ${clockText(hour)}`;
+    if (text !== this.labelText) { this.labelText = text; this.label.textContent = text; this.label.dataset.phase = light.phase.id; }
+  }
+
+  // ---------- Day and night ----------
+
+  /**
+   * Lights the scene for the time of day: multiplies a tint over everything,
+   * then adds the campfire's light (strongest at night), keeps its flames
+   * bright, and lets fireflies out after dark.
+   */
+  drawDaylight(light, t, fireAt, fireRect, frame) {
+    const { ctx, scale: s } = this;
+    const [r, g, b] = light.tint;
+    if (r < 255 || g < 255 || b < 255) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+      ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+      ctx.restore();
+    }
+    if (fireRect && light.fire > 0.25) {
+      // The fire's own light, in stepped rings that flicker with the flames.
+      const k = light.fire, flicker = 1 + 0.07 * Math.sin(t * 7.3) + 0.04 * Math.sin(t * 13.1 + frame);
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (const [rad, a] of [[46, 0.05], [34, 0.07], [24, 0.09], [15, 0.11]]) {
+        ctx.fillStyle = `rgba(255, 140, 60, ${a * k})`;
+        ctx.beginPath();
+        ctx.ellipse(Math.round(fireAt.x * s), Math.round((fireAt.y - 4) * s), rad * flicker * s, rad * 0.6 * flicker * s, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+      // The flames glow through the darkness, unless a fighter stands in front.
+      const [, fx, fy, fw] = fireRect;
+      const blocked = [...this.walkers.values()].some((w) => w.y > fireAt.y && Math.abs(w.x * s - (fx + fw / 2)) < (fw / 2 + 10 * s));
+      if (!blocked) { ctx.save(); ctx.globalAlpha = Math.min(1, (k - 0.25) * 1.4); ctx.drawImage(...fireRect); ctx.restore(); }
+    }
+    if (light.fireflies) {
+      const { cx, cy, rx, ry } = this.clearing();
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < light.fireflies; i++) {
+        const x = cx + Math.sin(t * 0.21 + i * 2.1) * (rx + 18) * Math.cos(i * 1.3);
+        const y = cy - 20 + Math.sin(t * 0.17 + i * 1.7) * (ry + 24);
+        const a = Math.max(0, Math.sin(t * 1.9 + i * 2.3));
+        ctx.fillStyle = `rgba(230, 255, 140, ${0.9 * a})`;
+        ctx.fillRect(Math.round(x) * s, Math.round(y) * s, s, s);
+        ctx.fillStyle = `rgba(200, 255, 120, ${0.25 * a})`;
+        ctx.fillRect((Math.round(x) - 1) * s, Math.round(y) * s, s * 3, s);
+        ctx.fillRect(Math.round(x) * s, (Math.round(y) - 1) * s, s, s * 3);
+      }
       ctx.restore();
     }
   }
