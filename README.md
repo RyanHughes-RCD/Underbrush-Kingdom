@@ -87,7 +87,7 @@ Weapons have a base **attack** and **scaling** grades (S to E) for the stats the
 
 Each material has a **quality**, from ×1.0 at tier 1 to ×3.5 at tier 10. A weapon's quality is (2 × main + fittings) ÷ 3, and it multiplies both attack and scaling. Damage = quality × (attack + Σ scaling × the wielder's stat), so the same weapon hits harder as its fighter levels up. A fighter's **power** on expeditions combines damage, defensive stats and HP. All the numbers live in `js/data.js`, and the formulas are in `js/stats.js`.
 
-At the top of the Camp tab, any fighter not away on an expedition wanders a grassy clearing ringed by trees, around a flickering campfire. The clearing follows your local time through **dawn**, **day**, **dusk** and **night**: warm pink light at dawn, golden then purple light at dusk, and at night a deep blue darkness lit by the campfire, with fireflies. A label in the corner shows the time of day. To test it, add `?hour=21` to the address to set the hour, or `?daylength=60` to run a whole day in 60 seconds. They squish and stretch as they go. Tap one to open their details. The trees and grass are drawn in code, so there are no image files for them.
+At the top of the Camp tab, any fighter not away on an expedition wanders a castle courtyard around a flickering campfire. The courtyard has battlemented walls, corner towers, a portcullis gate between needle-emblem banners, wall torches, hedge planters and a flagstone floor. The clearing follows your local time through **dawn**, **day**, **dusk** and **night**: warm pink light at dawn, golden then purple light at dusk, and at night a deep blue darkness lit by the campfire, with fireflies. A label in the corner shows the time of day. To test it, add `?hour=21` to the address to set the hour, or `?daylength=60` to run a whole day in 60 seconds. They squish and stretch as they go. Tap one to open their details. The courtyard is drawn in code (`js/courtyard.js`), so there are no image files for it.
 
 ## Project layout
 
@@ -97,7 +97,9 @@ css/style.css         Styles (mobile-first, pixel-art friendly)
 js/data.js            All game data and balance numbers
 js/game.js            Pure game logic (no DOM), unit tested
 js/main.js            UI rendering and input
-js/scene.js           Camp scene: forest clearing where idle fighters wander
+js/scene.js           Camp scene: idle fighters wander the courtyard around the campfire
+js/courtyard.js       Draws the castle courtyard (walls, gate, banners, torches, floor)
+js/daylight.js        Day-night lighting by local time
 js/sprites.js         Draws fighters: body + gear pieces joined at anchor points
 sw.js                 Service worker for offline play / install
 manifest.webmanifest  PWA manifest ("Add to Home Screen")

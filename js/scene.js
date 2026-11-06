@@ -1,95 +1,16 @@
-// The camp scene: a grassy clearing ringed by trees, where fighters who are at
-// camp wander about. Everything is drawn at a low "logical" resolution and
+// The camp scene: a castle courtyard (see js/courtyard.js) where fighters who
+// are at camp wander about around the campfire. Everything is drawn at a low "logical" resolution and
 // scaled up by a whole number so the pixel art stays crisp.
 
 import { mulberry32 } from './game.js';
 import { PAD, propArt } from './sprites.js';
 import { lightAt, hourNow, clockText } from './daylight.js';
+import { buildCourtyard, drawTorchFlame } from './courtyard.js';
 
 const SCENE_H = 160;         // logical pixels tall
 const TARGET_W = 190;        // roughly how many logical pixels wide
 const WALK_SPEED = 11;       // logical px per second
 const FIRE_CLEARANCE = 18;   // fighters keep this far from the campfire
-
-const GRASS = ['#4f8a3a', '#55913e', '#4a8336', '#5a9642'];
-const TUFT_LIGHT = '#6dab4c';
-const TUFT_DARK = '#3b6d2d';
-const FLOWERS = ['#f4f0d4', '#f2c94c', '#e58fb8', '#9fc3f0'];
-
-const LEAF = { outline: '#132313', shades: ['#1f3d24', '#2b5e30', '#3f8239', '#5fa043', '#86be52'] };
-const PINE = { outline: '#102019', shades: ['#173a2e', '#21523b', '#2f6d4a', '#43875a', '#5f9e68'] };
-const BARK = { outline: '#1f140c', shades: ['#3a2416', '#5c3a22', '#7a5030'] };
-
-function makeCanvas(w, h) {
-  const c = document.createElement('canvas');
-  c.width = w; c.height = h;
-  return c;
-}
-
-// ---------- Procedural pixel trees ----------
-
-function makeTree(rng, kind) {
-  const W = 32, H = 46;
-  const c = makeCanvas(W, H);
-  const ctx = c.getContext('2d');
-  const grid = Array.from({ length: H }, () => new Array(W).fill(null));
-  const pal = kind === 'pine' ? PINE : LEAF;
-
-  // Trunk
-  const tw = kind === 'pine' ? 3 : 4;
-  const tx = Math.floor(W / 2 - tw / 2);
-  for (let y = 24; y < H - 1; y++) {
-    for (let x = tx; x < tx + tw; x++) grid[y][x] = { t: 'bark', s: x === tx ? 0 : x === tx + tw - 1 ? 1 : 2 };
-  }
-  // Roots
-  grid[H - 2][tx - 1] = { t: 'bark', s: 0 };
-  grid[H - 2][tx + tw] = { t: 'bark', s: 1 };
-
-  // Canopy mask
-  const inCanopy = [];
-  if (kind === 'pine') {
-    const tiers = 3 + Math.floor(rng() * 2);
-    for (let i = 0; i < tiers; i++) {
-      const top = 2 + i * 7, bottom = top + 13, half = 5 + i * 2.6;
-      inCanopy.push((x, y) => y >= top && y <= bottom && Math.abs(x - W / 2 + 0.5) <= ((y - top) / (bottom - top)) * half + 0.5);
-    }
-  } else {
-    const blobs = [{ x: 16, y: 15, r: 11 + rng() * 2 }];
-    const n = 2 + Math.floor(rng() * 3);
-    for (let i = 0; i < n; i++) {
-      blobs.push({ x: 16 + (rng() - 0.5) * 14, y: 14 + (rng() - 0.3) * 10, r: 6 + rng() * 3.5 });
-    }
-    for (const b of blobs) inCanopy.push((x, y) => (x - b.x) ** 2 + (y - b.y) ** 2 <= b.r * b.r);
-  }
-  const cx = W / 2, cy = kind === 'pine' ? 18 : 14;
-  for (let y = 1; y < H - 1; y++) {
-    for (let x = 1; x < W - 1; x++) {
-      if (!inCanopy.some((f) => f(x, y))) continue;
-      // Light from the top-left, plus some leafy noise.
-      const light = (-(x - cx) * 0.6 - (y - cy)) / 14 + (rng() - 0.5) * 0.7;
-      const s = Math.max(0, Math.min(4, Math.round(2 + light * 1.6)));
-      grid[y][x] = { t: 'leaf', s };
-    }
-  }
-
-  // Paint, then add an outline around the whole silhouette.
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const p = grid[y][x];
-      if (p) {
-        ctx.fillStyle = p.t === 'bark' ? BARK.shades[p.s] : pal.shades[p.s];
-        ctx.fillRect(x, y, 1, 1);
-      } else {
-        const near = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => grid[y + dy]?.[x + dx]).filter(Boolean);
-        if (near.length) {
-          ctx.fillStyle = near.some((n) => n.t === 'leaf') ? pal.outline : BARK.outline;
-          ctx.fillRect(x, y, 1, 1);
-        }
-      }
-    }
-  }
-  return { canvas: c, w: W, h: H };
-}
 
 // ---------- Scene ----------
 
@@ -140,8 +61,9 @@ export class CampScene {
   }
 
   // The walkable clearing is an ellipse in the middle of the scene.
+  // The open courtyard floor fighters wander (an ellipse).
   clearing() {
-    return { cx: this.W / 2, cy: 94, rx: this.W / 2 - 34, ry: 30 };
+    return this.walk || { cx: Math.round(this.W / 2), cy: 100, rx: Math.round(this.W / 2) - 44, ry: 30 };
   }
 
   clamp(x, y) {
@@ -184,69 +106,12 @@ export class CampScene {
   }
 
   build() {
-    const W = this.W, H = SCENE_H;
-    const rng = mulberry32(98765);
-
-    // Grass
-    const bg = makeCanvas(W, H);
-    const g = bg.getContext('2d');
-    g.fillStyle = GRASS[0];
-    g.fillRect(0, 0, W, H);
-    for (let i = 0; i < W * H * 0.25; i++) {
-      g.fillStyle = GRASS[1 + Math.floor(rng() * 3)];
-      g.fillRect(Math.floor(rng() * W), Math.floor(rng() * H), 1, 1);
-    }
-    // Darker grass in the shade near the forest edge
-    const { cx, cy, rx, ry } = this.clearing();
-    for (let y = 0; y < H; y++) {
-      for (let x = 0; x < W; x++) {
-        const d = Math.hypot((x - cx) / (rx + 18), (y - cy) / (ry + 40));
-        if (d > 1 && rng() < Math.min(0.85, (d - 1) * 2.2)) {
-          g.fillStyle = rng() < 0.5 ? '#3e7230' : '#3a6a2d';
-          g.fillRect(x, y, 1, 1);
-        }
-      }
-    }
-    // Tufts and flowers
-    for (let i = 0; i < W * 0.5; i++) {
-      const x = Math.floor(rng() * W), y = Math.floor(rng() * H);
-      g.fillStyle = TUFT_DARK;
-      g.fillRect(x, y, 1, 1); g.fillRect(x + 2, y, 1, 1);
-      g.fillStyle = TUFT_LIGHT;
-      g.fillRect(x + 1, y - 1, 1, 2);
-    }
-    for (let i = 0; i < W * 0.12; i++) {
-      const p = this.randomSpot();
-      const x = Math.round(p.x + (rng() - 0.5) * 20), y = Math.round(p.y + (rng() - 0.5) * 16);
-      g.fillStyle = FLOWERS[Math.floor(rng() * FLOWERS.length)];
-      g.fillRect(x, y, 1, 1);
-      g.fillStyle = TUFT_DARK;
-      g.fillRect(x, y + 1, 1, 1);
-    }
-    // A few pebbles
-    for (let i = 0; i < 5; i++) {
-      const p = this.randomSpot();
-      g.fillStyle = '#8d8a80'; g.fillRect(Math.round(p.x), Math.round(p.y), 2, 1);
-      g.fillStyle = '#b9b5a8'; g.fillRect(Math.round(p.x), Math.round(p.y), 1, 1);
-    }
-    this.bg = bg;
-
-    // Trees around the borders. Each is placed by the base of its trunk so
-    // trees and creatures can be depth-sorted together.
-    const variants = [];
-    for (let i = 0; i < 6; i++) variants.push(makeTree(rng, 'round'));
-    for (let i = 0; i < 4; i++) variants.push(makeTree(rng, 'pine'));
-    const trees = [];
-    const add = (x, y) => trees.push({ x: Math.round(x), y: Math.round(y), t: variants[Math.floor(rng() * variants.length)] });
-    for (let row = 0; row < 3; row++) {                       // top: three staggered rows
-      for (let x = -12 + row * 7; x < W + 16; x += 15 + rng() * 6) add(x, 22 + row * 12 + rng() * 5);
-    }
-    for (let y = 58; y < H; y += 13 + rng() * 5) {              // left and right edges
-      add(4 + rng() * 10, y); add(-10 + rng() * 6, y + 6);
-      add(W - 4 - rng() * 10, y); add(W + 10 - rng() * 6, y + 6);
-    }
-    for (let x = -10; x < W + 16; x += 15 + rng() * 6) add(x, H + 16 + rng() * 8); // bottom edge
-    this.trees = trees;
+    const c = buildCourtyard(this.W, SCENE_H, mulberry32(98765));
+    this.bg = c.bg;
+    this.front = c.front;
+    this.trees = c.objects;     // planters and anything else depth-sorted with fighters
+    this.torches = c.torches;
+    this.walk = c.walk;
   }
 
   setCreatures(list) {
@@ -320,6 +185,7 @@ export class CampScene {
     if (fire) this.drawGlow(fireAt, t, fireFrame);
     const hour = hourNow();
     const light = lightAt(hour);
+    (this.torches || []).forEach((tc, i) => drawTorchFlame(ctx, s, t, tc.x, tc.y, i));
 
     const things = [
       ...this.trees.map((tr) => ({ y: tr.y, tree: tr })),
@@ -366,6 +232,7 @@ export class CampScene {
       ctx.restore();
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+    if (this.front) ctx.drawImage(this.front, 0, 0, this.W * s, SCENE_H * s);
     this.drawDaylight(light, t, fireAt, fireRect, fireFrame);
     const text = `${light.phase.name} · ${clockText(hour)}`;
     if (text !== this.labelText) { this.labelText = text; this.label.textContent = text; this.label.dataset.phase = light.phase.id; }
@@ -404,6 +271,23 @@ export class CampScene {
       const [, fx, fy, fw] = fireRect;
       const blocked = [...this.walkers.values()].some((w) => w.y > fireAt.y && Math.abs(w.x * s - (fx + fw / 2)) < (fw / 2 + 10 * s));
       if (!blocked) { ctx.save(); ctx.globalAlpha = Math.min(1, (k - 0.25) * 1.4); ctx.drawImage(...fireRect); ctx.restore(); }
+    }
+    if (light.fire > 0.25) {
+      // Wall torches: a small warm pool each, and flames that stay bright.
+      const k = light.fire;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      (this.torches || []).forEach((tc, i) => {
+        const fl = 1 + 0.08 * Math.sin(t * 9 + i * 2);
+        for (const [rad, a] of [[22, 0.04], [14, 0.06], [7, 0.09]]) {
+          ctx.fillStyle = `rgba(255, 150, 70, ${a * k})`;
+          ctx.beginPath(); ctx.ellipse(tc.x * s, (tc.y - 2) * s, rad * fl * s, rad * 0.8 * fl * s, 0, 0, Math.PI * 2); ctx.fill();
+        }
+      });
+      ctx.restore();
+      ctx.save(); ctx.globalAlpha = Math.min(1, (k - 0.25) * 1.4);
+      (this.torches || []).forEach((tc, i) => drawTorchFlame(ctx, s, t, tc.x, tc.y, i));
+      ctx.restore();
     }
     if (light.fireflies) {
       const { cx, cy, rx, ry } = this.clearing();
