@@ -1,6 +1,6 @@
-// Draws the app icon from the game's own sprite data: the three heroes, each
-// holding a crafted weapon, in a forest clearing. Pixel art at a low
-// resolution, scaled up by whole numbers.
+// Draws the app icon from the game's own sprite data: a portrait headshot
+// of the Wizard Mouse against a pale moon, framed by dark leaves. Pixel art
+// at a low resolution, scaled up by whole numbers.
 //
 // Run: node tools/make_app_icon.mjs
 // Writes assets/icons/: icon-512.png, icon-192.png (any purpose),
@@ -11,7 +11,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { layout, decode, tintedBody } from '../js/sprites.js';
+import { decode } from '../js/sprites.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const sheet = JSON.parse(readFileSync(join(root, 'assets/sprites/sprites.json')));
@@ -98,54 +98,72 @@ function tree(cv, cx, baseY, r, rand) {
   }
 }
 
-function fighter(cls, weapon, tint) {
-  const parts = layout(sheet, cls, weapon ? [weapon] : [], tint);
-  const W = 48, out = new Uint8ClampedArray(W * W * 4);
-  for (const p of parts) {
-    const src = decode(p.sprite);
-    for (let y = 0; y < p.sprite.h; y++) for (let x = 0; x < p.sprite.w; x++) {
-      const tx = p.x + x, ty = p.y + y, i = (y * p.sprite.w + x) * 4;
-      if (tx < 0 || ty < 0 || tx >= W || ty >= W || !src[i + 3]) continue;
-      out.set(src.subarray(i, i + 4), (ty * W + tx) * 4);
-    }
+// The headshot: this part of the Wizard Mouse body (hood, ears, face and
+// shoulders), drawn at PORTRAIT_SCALE logical pixels per sprite pixel.
+const CROP = { x: 8, y: 4, w: 17, h: 17 };
+const PORTRAIT_SCALE = 3;
+
+function leafCluster(cv, cx, cy, r, rand) {
+  const filled = new Set();
+  for (let y = cy - r; y <= cy + r; y++) for (let x = cx - r; x <= cx + r; x++) {
+    if (Math.hypot(x - cx, y - cy) > r + (rand() - 0.5) * 1.5) continue;
+    const light = (-(x - cx) * 0.5 - (y - cy)) / r + (rand() - 0.5) * 0.7;
+    set(cv, x, y, hex(LEAF[Math.max(1, Math.min(3, Math.round(1.6 + light * 1.2)))]));
+    filled.add(`${x},${y}`);
   }
-  return out;
+  for (const k of filled) {
+    const [x, y] = k.split(',').map(Number);
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (!filled.has(`${x + dx},${y + dy}`)) set(cv, x + dx, y + dy, hex(LEAF[0]));
+  }
 }
 
 // Draws the icon at `size` logical pixels; the 64-pixel artwork is centred,
 // so a larger size just adds more background around it (for maskable icons).
 function scene(size) {
-  const cv = canvas(size, size), rand = rng(20261105), o = (size - 64) / 2;
-  // Night-forest backdrop, darker at the top.
-  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) set(cv, x, y, hex(SKY[Math.min(2, Math.floor((y / size) * 3))]));
-  // Back row of trees, then the clearing floor.
-  for (let x = -6; x < size + 8; x += 9 + Math.floor(rand() * 4)) tree(cv, x, o + 25 + Math.floor(rand() * 4), 6 + Math.floor(rand() * 3), rand);
+  const cv = canvas(size, size), rand = rng(20261106), o = (size - 64) / 2;
+  const cx = size / 2, cy = o + 29;
+  // Dusky forest backdrop, a little lighter toward the moon.
   for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-    const d = Math.hypot((x - size / 2) / (size * 0.66), (y - (o + 56)) / (size * 0.42));
-    if (d < 1) set(cv, x, y, hex(GRASS[d < 0.45 ? 3 : d < 0.7 ? 2 : d < 0.88 ? 1 : 0]));
+    const d = Math.hypot(x - cx, y - cy);
+    set(cv, x, y, hex(d < 31 ? '#233f27' : d < 40 ? '#1c3321' : '#16281a'));
   }
-  for (let i = 0; i < size * 1.2; i++) {          // grass tufts
-    const x = Math.floor(rand() * size), y = Math.floor(o + 40 + rand() * (size - o - 40));
-    set(cv, x, y, hex('#2f5d27')); set(cv, x + 1, y - 1, hex('#7bb54a'));
+  // The moon: a pale disc with a darker rim, dithered at the edge.
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const d = Math.hypot(x - cx, (y - cy) * 1.02);
+    if (d < 26) set(cv, x, y, hex(d < 21 ? '#f4e3a6' : d < 24 ? '#e9cf84' : '#d2b067'));
+    else if (d < 27 && (x + y) % 2 === 0) set(cv, x, y, hex('#d2b067'));
   }
-  for (let i = 0; i < 7; i++) {                    // fireflies
-    const x = o + 4 + rand() * 56, y = o + 3 + rand() * 18;
-    set(cv, x, y, hex('#fff3a0')); set(cv, x + 1, y, hex('#f2c94c'), 140); set(cv, x, y + 1, hex('#f2c94c'), 140);
+  for (const [mx, my, mr] of [[-14, -10, 2], [12, -15, 1.5], [17, 2, 2.5], [-17, 8, 1.5]]) {   // craters
+    for (let y = -3; y <= 3; y++) for (let x = -3; x <= 3; x++) if (Math.hypot(x, y) <= mr) set(cv, cx + mx + x, cy + my + y, hex('#e4c97c'));
   }
-  // The three heroes, feet on the grass, each with a weapon. The beetle
-  // stands further back (higher up) between the other two, and the mouse
-  // turns to face in.
-  const heroes = [
-    { cls: 'knight', weapon: { type: 'sword', material: 'steel', accent: 'garnet' }, x: 33, y: 46 },
-    { cls: 'archer', weapon: { type: 'longbow', material: 'oak', accent: 'iron' }, x: 15, y: 60 },
-    { cls: 'mage', weapon: { type: 'staff', material: 'amethyst', accent: 'oak' }, x: 50, y: 60, flip: true },
-  ];
-  for (const h of heroes) {
-    for (let dx = -8; dx <= 8; dx++) for (let dy = -1; dy <= 1; dy++) {      // shadow
-      if ((dx / 8) ** 2 + dy * dy <= 1) set(cv, o + h.x + dx, o + h.y + dy, [16, 30, 14], 110);
+  // Leaves framing the corners and edges.
+  const leaves = [[-3, -3, 8], [8, -5, 5], [size + 1, -2, 8], [size - 10, -5, 5], [-5, size - 5, 9], [size + 4, size - 6, 9]];
+  for (const [x, y, r] of leaves) leafCluster(cv, x, y, r, rand);
+  // Fireflies.
+  for (const [fx, fy] of [[o + 9, o + 14], [o + 55, o + 11], [o + 6, o + 40], [o + 58, o + 36], [o + 48, o + 52], [o + 13, o + 55]]) {
+    set(cv, fx, fy, hex('#fff3a0')); set(cv, fx + 1, fy, hex('#f2c94c'), 120); set(cv, fx - 1, fy, hex('#f2c94c'), 120);
+    set(cv, fx, fy + 1, hex('#f2c94c'), 120); set(cv, fx, fy - 1, hex('#f2c94c'), 120);
+  }
+  // The mouse, cropped to its head and shoulders and enlarged. The bust runs
+  // off the bottom edge of the 64-pixel art, like a portrait.
+  const body = sheet.bodies.mage, rgba = decode(body);
+  const pw = CROP.w * PORTRAIT_SCALE, ph = CROP.h * PORTRAIT_SCALE;
+  const ox = Math.round(cx - pw / 2) + 1, oy = o + 64 - ph;
+  // A soft dark outline around the silhouette so it stands off the moon.
+  const at = (x, y) => x >= 0 && y >= 0 && x < body.w && y < body.h && rgba[(y * body.w + x) * 4 + 3];
+  for (let y = 0; y < CROP.h; y++) for (let x = 0; x < CROP.w; x++) {
+    const sx = CROP.x + x, sy = CROP.y + y;
+    if (at(sx, sy)) continue;
+    if (at(sx + 1, sy) || at(sx - 1, sy) || at(sx, sy + 1) || at(sx, sy - 1)) {
+      for (let ky = 0; ky < PORTRAIT_SCALE; ky++) for (let kx = 0; kx < PORTRAIT_SCALE; kx++) set(cv, ox + x * PORTRAIT_SCALE + kx, oy + y * PORTRAIT_SCALE + ky, [10, 8, 16], 150);
     }
-    // Composite canvas is 48x48 with the body's feet at (8 + 16, 8 + 32).
-    blit(cv, fighter(h.cls, h.weapon, null), 48, 48, o + h.x - 24, o + h.y - 39, h.flip);
+  }
+  for (let y = 0; y < CROP.h; y++) for (let x = 0; x < CROP.w; x++) {
+    const i = ((CROP.y + y) * body.w + CROP.x + x) * 4;
+    if (!rgba[i + 3]) continue;
+    for (let ky = 0; ky < PORTRAIT_SCALE; ky++) for (let kx = 0; kx < PORTRAIT_SCALE; kx++) {
+      set(cv, ox + x * PORTRAIT_SCALE + kx, oy + y * PORTRAIT_SCALE + ky, [rgba[i], rgba[i + 1], rgba[i + 2]]);
+    }
   }
   return cv;
 }

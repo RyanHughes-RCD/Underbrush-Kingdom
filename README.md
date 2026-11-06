@@ -146,7 +146,7 @@ Character art is edited in the **[Sprite Workshop](https://claude.ai/artifact/SG
   `python3 tools/downscale_sprite.py <in.png> <out.png> <grid-x-offset> <grid-y-offset>`
 - `tools/make_8bit_sprites.py` makes the 32×32 8-bit game sprites from the 64×64 versions. It halves the resolution, cuts each sprite to a 10-colour palette, and mirrors the beetle so all three face right.
 - `tools/sync_sprites.py` builds `sprites.json` from the workshop's saved data and regenerates the PNG previews and app icons.
-- `tools/make_app_icon.mjs` draws the app icons (home screen, maskable, Apple touch icon and favicon) from the sprite data: the three heroes with crafted weapons in a forest clearing. `tools/sync_sprites.py` runs it, so the icon follows your art.
+- `tools/make_app_icon.mjs` draws the app icons (home screen, maskable, Apple touch icon and favicon) from the sprite data: a portrait headshot of the Wizard Mouse against a full moon. Change `CROP` in the script to reframe it. `tools/sync_sprites.py` runs it, so the icon follows your art.
 - `tools/make_item_icons.py` regenerates the item and scrap icons.
 
 When you ship changes, bump `CACHE` in `sw.js` so installed copies update.
