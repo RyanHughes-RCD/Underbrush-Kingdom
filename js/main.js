@@ -19,6 +19,7 @@ const ui = {
   expType: null,         // expedition type being planned
   region: null,          // region being planned
   partyPicked: false,    // whether the party has been filled in yet
+  campPanel: false,      // the 'Your Band' panel over the courtyard
   party: [],             // creature ids chosen for it
   count: 3,              // encounters chosen
   smelt: {},             // workshop id -> {scrapId: count} batch being filled
@@ -159,6 +160,11 @@ function renderCamp() {
   const lures = state.lures;
   return `
     <div id="scene-slot"></div>
+    <button class="band-btn" data-action="toggle-band" aria-expanded="${ui.campPanel}">Your band (${state.creatures.length})</button>
+    <div class="band-backdrop ${ui.campPanel ? 'open' : ''}" data-action="toggle-band"></div>
+    <section class="band-panel ${ui.campPanel ? 'open' : ''}" aria-hidden="${!ui.campPanel}">
+    <button class="band-handle" data-action="toggle-band" aria-label="Close"><span></span></button>
+    <div class="band-scroll">
     ${awayNote()}
     <h2>Your Band (${state.creatures.length})</h2>
     <p class="hint">Tap a fighter to see details or hand them a weapon.</p>
@@ -180,7 +186,8 @@ function renderCamp() {
 
     <h2>Camp Journal</h2>
     <div class="card"><ul class="log">${state.log.slice(0, 15).map((l) => `<li>${esc(l.text)}</li>`).join('')}</ul></div>
-    <button class="btn ghost sm" data-action="reset">Start over</button>`;
+    <button class="btn ghost sm" data-action="reset">Start over</button>
+    </div></section>`;
 }
 
 function openCreature(id) {
@@ -441,10 +448,23 @@ function openMaterial(id) {
 
 // ---------- Render loop ----------
 
+/** Slides the band panel open or shut without rebuilding the page. */
+function setBandPanel(open) {
+  ui.campPanel = open;
+  document.querySelector('.band-panel')?.classList.toggle('open', open);
+  document.querySelector('.band-backdrop')?.classList.toggle('open', open);
+  document.querySelector('.band-panel')?.setAttribute('aria-hidden', String(!open));
+  document.querySelector('.band-btn')?.setAttribute('aria-expanded', String(open));
+}
+
 function render() {
   renderSatchel();
+  const keep = document.querySelector('.band-scroll')?.scrollTop || 0; // re-renders keep the panel's scroll
+  view.classList.toggle('camp-mode', ui.tab === 'camp');
   view.innerHTML = ui.tab === 'camp' ? renderCamp() : ui.tab === 'expeditions' ? renderExpeditions() : renderWorkshops();
   mountScene();
+  const scroller = document.querySelector('.band-scroll');
+  if (scroller) scroller.scrollTop = keep;
   const ready = state.expeditions.some((e) => G.isExpeditionComplete(e));
   document.querySelectorAll('#tabs button').forEach((b) => {
     b.classList.toggle('active', b.dataset.tab === ui.tab);
@@ -482,7 +502,10 @@ function act(fn) {
 $('#tabs').addEventListener('click', (ev) => {
   const b = ev.target.closest('button[data-tab]');
   if (!b) return;
+  // Tapping Camp while already in camp opens (or closes) your band.
+  if (b.dataset.tab === 'camp' && ui.tab === 'camp') { setBandPanel(!ui.campPanel); return; }
   ui.tab = b.dataset.tab;
+  if (ui.tab === 'camp') ui.campPanel = false;
   render();
   view.scrollTop = 0;
 });
@@ -493,6 +516,7 @@ document.addEventListener('click', (ev) => {
   const { action, id } = el.dataset;
   switch (action) {
     case 'creature': openCreature(id); break;
+    case 'toggle-band': setBandPanel(!ui.campPanel); break;
     case 'close': closeModal(); break;
     case 'equip':
       act(() => G.equipWeapon(state, id, el.dataset.weapon || null));

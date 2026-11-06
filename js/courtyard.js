@@ -133,8 +133,10 @@ export function buildCourtyard(W, H, rng) {
   // Shade along the foot of the walls.
   for (let x = fx0; x < fx1; x++) if (rng() < 0.6) px(x, fy0, C.shadow);
 
-  // Cobbled ring where the campfire stands.
-  const walk = { cx, cy: 100, rx: Math.round(W / 2) - 44, ry: 30 };
+  // The open floor fighters wander: an ellipse filling the space between the
+  // walls and planters. The campfire's cobbled ring sits at its centre.
+  const floorMid = (fy0 + fy1) / 2;
+  const walk = { cx, cy: Math.round(floorMid + 4), rx: Math.round(W / 2) - 44, ry: Math.max(26, Math.round((fy1 - fy0) / 2) - 20) };
   const fy = walk.cy + 4;
   for (let y = fy - 12; y <= fy + 8; y++) for (let x = cx - 22; x <= cx + 22; x++) {
     const d = Math.hypot((x - cx) / 22, (y - (fy - 2)) / 10);
@@ -175,7 +177,12 @@ export function buildCourtyard(W, H, rng) {
   }
   const objects = [];
   const pt = { canvas: planter, w: 18, h: 16 };
-  for (const [x, y] of [[SIDE + 12, 72], [W - SIDE - 12, 72], [SIDE + 12, 128], [W - SIDE - 12, 128]]) objects.push({ x, y, t: pt });
+  // Planters down both sides, spaced to fill however tall the courtyard is.
+  const rows = Math.max(2, Math.round((FRONT - 4 - 72) / 56) + 1);
+  for (let i = 0; i < rows; i++) {
+    const y = Math.round(72 + (i * (FRONT - 4 - 72)) / (rows - 1));
+    objects.push({ x: SIDE + 12, y, t: pt }, { x: W - SIDE - 12, y, t: pt });
+  }
 
   const torches = [{ x: cx - 50, y: WALL_FACE + 12 }, { x: cx + 50, y: WALL_FACE + 12 }];
   for (const t of torches) { px(t.x - 1, t.y, C.iron, 3, 1); px(t.x, t.y + 1, C.iron, 1, 4); px(t.x - 1, t.y + 5, C.ironL, 3, 1); }

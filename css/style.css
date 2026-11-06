@@ -369,3 +369,38 @@ button { font-family: inherit; font-size: inherit; color: inherit; }
 .scene-time[data-phase="night"] { color: #c9d4ff; }
 .scene-time[data-phase="dawn"] { color: #ffc9b8; }
 .scene-time[data-phase="dusk"] { color: #ffc98a; }
+
+/* ---------- Full-screen camp ---------- */
+.view.camp-mode { padding: 0; overflow: hidden; position: relative; }
+.view.camp-mode .scene {
+  position: absolute; left: 0; right: 0; top: 0;
+  bottom: calc(var(--tab-h) + env(safe-area-inset-bottom));
+  margin: 0; border: 0;
+}
+.view.camp-mode .scene canvas { width: 100%; }
+.band-btn {
+  position: absolute; z-index: 3; right: 10px;
+  bottom: calc(var(--tab-h) + env(safe-area-inset-bottom) + 10px);
+  background: var(--panel); color: var(--ink); border: 3px solid var(--line); border-radius: 999px;
+  box-shadow: 0 3px 0 #121b14; padding: 6px 14px; font-weight: 600; font-size: 14px; cursor: pointer; min-height: 40px;
+}
+.band-backdrop {
+  position: absolute; left: 0; right: 0; top: 0; bottom: calc(var(--tab-h) + env(safe-area-inset-bottom));
+  z-index: 4; background: rgba(10, 16, 12, .45);
+  opacity: 0; pointer-events: none; transition: opacity .2s;
+}
+.band-backdrop.open { opacity: 1; pointer-events: auto; }
+.band-panel {
+  position: absolute; z-index: 5; left: 0; right: 0;
+  bottom: calc(var(--tab-h) + env(safe-area-inset-bottom));
+  max-height: 78%; display: flex; flex-direction: column;
+  background: var(--bg); border-top: 3px solid #121b14; border-radius: 14px 14px 0 0;
+  transform: translateY(105%); transition: transform .25s ease; visibility: hidden;
+}
+.band-panel.open { transform: translateY(0); visibility: visible; }
+.band-handle { background: none; border: 0; padding: 8px 0 2px; cursor: pointer; display: flex; justify-content: center; }
+.band-handle span { width: 44px; height: 5px; border-radius: 3px; background: #6e8a70; }
+.band-scroll { overflow-y: auto; padding: 0 16px 16px; -webkit-overflow-scrolling: touch; }
+@media (prefers-reduced-motion: reduce) { .band-panel, .band-backdrop { transition: none; } }
+
+.tabs { z-index: 6; }

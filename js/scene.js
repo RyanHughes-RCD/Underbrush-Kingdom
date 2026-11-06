@@ -7,7 +7,7 @@ import { PAD, propArt } from './sprites.js';
 import { lightAt, hourNow, clockText } from './daylight.js';
 import { buildCourtyard, drawTorchFlame } from './courtyard.js';
 
-const SCENE_H = 160;         // logical pixels tall
+const MIN_H = 160;           // logical pixels tall, at least
 const TARGET_W = 190;        // roughly how many logical pixels wide
 const WALK_SPEED = 11;       // logical px per second
 const FIRE_CLEARANCE = 18;   // fighters keep this far from the campfire
@@ -37,20 +37,23 @@ export class CampScene {
     new ResizeObserver(() => this.resize()).observe(this.el);
   }
 
+  // Fills the element: the width sets a whole-number scale (about TARGET_W
+  // logical pixels across) and the height follows, so the courtyard covers
+  // the whole screen on a phone.
   resize() {
-    const cssW = this.el.clientWidth;
+    const cssW = this.el.clientWidth, cssH = this.el.clientHeight;
     if (!cssW) return;
     const dpr = window.devicePixelRatio || 1;
-    const devW = Math.round(cssW * dpr);
+    const devW = Math.round(cssW * dpr), devH = Math.round(cssH * dpr);
     const s = Math.max(1, Math.round(devW / TARGET_W));
-    const W = Math.ceil(devW / s);
+    const W = Math.ceil(devW / s), H = Math.max(MIN_H, Math.ceil(devH / s));
     this.canvas.width = devW;
-    this.canvas.height = SCENE_H * s;
-    this.canvas.style.height = `${(SCENE_H * s) / dpr}px`;
+    this.canvas.height = H * s;
+    this.canvas.style.height = `${(H * s) / dpr}px`;
     this.scale = s;
-    if (W !== this.W) {
+    if (W !== this.W || H !== this.H) {
       const first = !this.W;
-      this.W = W;
+      this.W = W; this.H = H;
       this.build();
       for (const w of this.walkers.values()) {
         const p = first ? this.randomSpot() : this.clamp(w.x, w.y);
@@ -60,10 +63,9 @@ export class CampScene {
     this.draw(0);
   }
 
-  // The walkable clearing is an ellipse in the middle of the scene.
   // The open courtyard floor fighters wander (an ellipse).
   clearing() {
-    return this.walk || { cx: Math.round(this.W / 2), cy: 100, rx: Math.round(this.W / 2) - 44, ry: 30 };
+    return this.walk || { cx: Math.round(this.W / 2), cy: Math.round((this.H || MIN_H) * 0.62), rx: Math.round(this.W / 2) - 44, ry: 30 };
   }
 
   clamp(x, y) {
@@ -106,7 +108,7 @@ export class CampScene {
   }
 
   build() {
-    const c = buildCourtyard(this.W, SCENE_H, mulberry32(98765));
+    const c = buildCourtyard(this.W, this.H, mulberry32(98765));
     this.bg = c.bg;
     this.front = c.front;
     this.trees = c.objects;     // planters and anything else depth-sorted with fighters
@@ -177,7 +179,7 @@ export class CampScene {
     if (!this.bg) return;
     ctx.imageSmoothingEnabled = false;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.drawImage(this.bg, 0, 0, this.W * s, SCENE_H * s);
+    ctx.drawImage(this.bg, 0, 0, this.W * s, this.H * s);
 
     const fire = propArt('campfire');
     const fireAt = this.fireSpot();
@@ -232,7 +234,7 @@ export class CampScene {
       ctx.restore();
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    if (this.front) ctx.drawImage(this.front, 0, 0, this.W * s, SCENE_H * s);
+    if (this.front) ctx.drawImage(this.front, 0, 0, this.W * s, this.H * s);
     this.drawDaylight(light, t, fireAt, fireRect, fireFrame);
     const text = `${light.phase.name} · ${clockText(hour)}`;
     if (text !== this.labelText) { this.labelText = text; this.label.textContent = text; this.label.dataset.phase = light.phase.id; }
@@ -326,7 +328,7 @@ export class CampScene {
   handleTap(ev) {
     const rect = this.canvas.getBoundingClientRect();
     const x = ((ev.clientX - rect.left) / rect.width) * this.W;
-    const y = ((ev.clientY - rect.top) / rect.height) * SCENE_H;
+    const y = ((ev.clientY - rect.top) / rect.height) * this.H;
     const hit = [...this.walkers.values()]
       .sort((a, b) => b.y - a.y)
       .find((w) => Math.abs(x - w.x) < 12 && y < w.y + 2 && y > w.y - 28);
