@@ -110,7 +110,7 @@ test('coins: earned per won encounter, spent to unlock regions in order', () => 
   assert.ok(G.isUnlocked(s, 'thicket'));
   assert.throws(() => G.unlockRegion(s, 'thicket'), /already open/);
   s.coins = 3;
-  assert.throws(() => G.unlockRegion(s, 'creek'), /Needs 50 coins/);
+  assert.throws(() => G.unlockRegion(s, 'creek'), /Needs 150 coins/);
 });
 
 test('every region but the first costs coins, and costs rise', () => {

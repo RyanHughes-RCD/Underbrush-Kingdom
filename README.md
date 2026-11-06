@@ -27,13 +27,13 @@ A phone-first web game about a band of tiny heroes living in the underbrush. Col
      | Region | Difficulty | Unlock | Coins per win | Mostly finds | Rarest scrap | Uncommon or better | Extra finds per win | XP per win |
      |---|---|---|---|---|---|---|---|---|
      | Windy Meadow | 1 | Free | 2 | A bit of everything | Rare | 20% | — | 1 |
-     | Tangled Thicket | 2 | 15 | 4 | Wood | Epic | 40% | +1 | 1 |
-     | Glimmer Creek | 3 | 50 | 6 | Crystal | Legendary | 58% | +2 | 2 |
-     | Old Gutter Drain | 4 | 105 | 9 | Metal | Divine | 72% | +3 | 3 |
-     | Abandoned Garden Shed | 5 | 185 | 13 | Metal and wood | Divine | 82% | +4 | 4 |
-     | Rootdeep Warren | 6 | 310 | 18 | Wood | Divine | 90% | +5 | 5 |
-     | Shattered Greenhouse | 7 | 470 | 24 | Crystal | Divine | 95% | +6 | 6 |
-     | The Rusted Clocktower | 8 | 700 | 32 | Metal | Divine | 98% | +7 | 8 |
+     | Tangled Thicket | 2 | 45 | 4 | Wood | Epic | 40% | +1 | 1 |
+     | Glimmer Creek | 3 | 150 | 6 | Crystal | Legendary | 58% | +2 | 2 |
+     | Old Gutter Drain | 4 | 315 | 9 | Metal | Divine | 72% | +3 | 3 |
+     | Abandoned Garden Shed | 5 | 555 | 13 | Metal and wood | Divine | 82% | +4 | 4 |
+     | Rootdeep Warren | 6 | 930 | 18 | Wood | Divine | 90% | +5 | 5 |
+     | Shattered Greenhouse | 7 | 1410 | 24 | Crystal | Divine | 95% | +6 | 6 |
+     | The Rusted Clocktower | 8 | 2100 | 32 | Metal | Divine | 98% | +7 | 8 |
 3. **Duration = encounters.** Choose 1–12 encounters, 10 minutes each (6 encounters = 1 hour). Results are revealed one encounter at a time. Later encounters are harder but give more. You can recall a party early and keep what they've already found.
 4. **Scrap and workshops.** Expeditions bring home scrap in seven rarities per family:
 
