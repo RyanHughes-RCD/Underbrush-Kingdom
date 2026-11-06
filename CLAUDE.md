@@ -28,18 +28,19 @@ Static web game with no build step (HTML, CSS and ES modules). `npm test` runs t
 
 ## Character art
 
-- `assets/sprites/sprites.json` is the source of truth for character art. It holds `bodies` (one per class), `weapons` (one design per weapon type) and `pieces` (armour and other worn gear). Weapons and pieces attach to a body by naming an anchor (`hand`, `offhand`, `head`, `chest`, `back`, …); their `pivot` lands on that anchor. The format is documented at the top of `js/sprites.js`.
+- `assets/sprites/sprites.json` is the source of truth for character art. It holds `bodies` (one per class), `weapons` (one design per weapon type), `pieces` (armour and other worn gear) and `props` (animated scenery: `{w, h, palette, frames: [pixels…], fps, sceneScale}`, all frames sharing one palette and size). Weapons and pieces attach to a body by naming an anchor (`hand`, `offhand`, `head`, `chest`, `back`, …); their `pivot` lands on that anchor. The format is documented at the top of `js/sprites.js`.
 - Weapon types live in `WEAPONS` in `js/data.js`, two per class (longbow/recurve, sword/mace, staff/tome), each with its own `attack` and `scaling` (see Stats). A crafted weapon is `{type, material, accent}`: 2 of a main material from `family` plus 1 fittings material from `accentFamily` (archer wood+metal, knight metal+crystal, mage crystal+wood). Quality = (2·main + fittings) / 3.
 - A weapon design has `swaps` (palette indices that follow the main material), `accentSwaps` and `accents.<material>.colors` (palette indices and saved colours for the fittings), and `variants.<material>`, which is either `{colors}` (a recolour) or `{w, h, pixels, palette, pivot, accentSwaps, accents}` (its own design). A material with no variant is recoloured automatically from its palette in `data.js`; see `weaponSprite()` in `js/sprites.js`. The Sprite Workshop copies these weapon types and material palettes, so keep the two in step. A piece with `wornBy: [class]` is always drawn on that class. An equipped weapon replaces worn pieces in the same `slot`.
+- The camp scene (`js/scene.js`) draws the `campfire` prop in the middle of the clearing, animated at its `fps`, with a flickering glow; fighters pick spots and paths that keep clear of it. `sceneScale` 0.5 draws each prop pixel at half a camp pixel.
 - `assets/sprites/*.png` are generated previews (used for tab icons and the README). Don't edit them by hand.
 - App icons in `assets/icons/` are drawn by `tools/make_app_icon.mjs` (run by `sync_sprites.py`); the manifest lists both `any` and `maskable` icons.
 
 ## Syncing from the Sprite Workshop
 
-The user edits sprites in the Sprite Workshop artifact: https://claude.ai/artifact/SGtaz1YMDs5cTKcVrUjBFR (source: `tools/sprite-workshop.html`). Its database has collections `bodies`, `weapons` and `pieces` (one document per sprite or weapon design, id = its key in sprites.json), plus `meta/release`, which the page writes when the user presses "Send to game".
+The user edits sprites in the Sprite Workshop artifact: https://claude.ai/artifact/SGtaz1YMDs5cTKcVrUjBFR (source: `tools/sprite-workshop.html`). Its database has collections `bodies`, `weapons`, `pieces` and `props` (one document per sprite or weapon design, id = its key in sprites.json), plus `meta/release`, which the page writes when the user presses "Send to game".
 
 When asked to sync the sprites:
-1. Read all three collections with ArtifactData `list` and `out_dir` set to one scratch folder, so you get `<dir>/bodies/`, `<dir>/weapons/` and `<dir>/pieces/`. Page with the cursor if `next_cursor` comes back.
+1. Read all four collections with ArtifactData `list` and `out_dir` set to one scratch folder, so you get `<dir>/bodies/`, `<dir>/weapons/`, `<dir>/pieces/` and `<dir>/props/`. Page with the cursor if `next_cursor` comes back.
 2. Run `python3 tools/sync_sprites.py <dir>`. It validates the documents, writes `sprites.json`, and regenerates the PNGs and app icons.
 3. Run `npm test`. Look at the regenerated PNGs, and bump `CACHE` in `sw.js`.
 4. Commit and push.

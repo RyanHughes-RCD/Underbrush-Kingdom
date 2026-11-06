@@ -7,6 +7,10 @@
 //                    (each creature shifts their hue; see tintPalette())
 //   weapons.<type>   one design per weapon type (longbow, mace, tome, ...)
 //   pieces.<id>      other gear: armour, hats, anything worn
+//   props.<id>       animated scenery, e.g. the campfire: {name, w, h,
+//                    palette, frames: [pixels, ...], fps, sceneScale}. All
+//                    frames share the palette and size; sceneScale is how
+//                    big it's drawn in the camp relative to the fighters.
 //
 // A body defines anchors. A piece or weapon names the anchor it attaches to
 // and its own pivot; it is drawn so its pivot lands on the anchor. Pieces with
@@ -220,6 +224,25 @@ function artFor(key, sprite) {
   if (!sprite) return null;
   const c = spriteCanvas(sprite);
   const art = { canvas: c, url: c.toDataURL(), w: sprite.w, h: sprite.h };
+  cache.set(key, art);
+  return art;
+}
+
+/** One frame of an animated prop as a plain sprite, or null. */
+export function propFrame(data, id, frame = 0) {
+  const p = data?.props?.[id];
+  if (!p?.frames?.length) return null;
+  const f = ((frame % p.frames.length) + p.frames.length) % p.frames.length;
+  return { w: p.w, h: p.h, palette: p.palette, pixels: p.frames[f] };
+}
+
+/** All frames of a prop as canvases, for animating. */
+export function propArt(id) {
+  const key = `prop:${id}`;
+  if (cache.has(key)) return cache.get(key);
+  const p = sheet?.props?.[id];
+  if (!p) return null;
+  const art = { frames: p.frames.map((_, i) => spriteCanvas(propFrame(sheet, id, i))), w: p.w, h: p.h, fps: p.fps || 6, sceneScale: p.sceneScale ?? 0.5 };
   cache.set(key, art);
   return art;
 }

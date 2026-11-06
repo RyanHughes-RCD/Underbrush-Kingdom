@@ -3,7 +3,8 @@ regenerates the PNG previews and app icons.
 
 Usage:
   python3 tools/sync_sprites.py <dir>
-where <dir> holds bodies/<id>.json, weapons/<type>.json and pieces/<id>.json
+where <dir> holds bodies/<id>.json, weapons/<type>.json, pieces/<id>.json and
+props/<id>.json
 (one document each,
 as the workshop's database stores them). With no <dir>, only the PNGs are
 regenerated from the existing sprites.json.
@@ -16,10 +17,16 @@ PAD = 8
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SHEET = os.path.join(ROOT, 'assets/sprites/sprites.json')
 FILES = {'archer': 'archer-lizard', 'knight': 'beetle-knight', 'mage': 'wizard-mouse'}
-KEEP = ('name', 'w', 'h', 'palette', 'pixels', 'anchors', 'slot', 'anchor', 'pivot', 'layer', 'wornBy', 'swaps', 'variants', 'accentSwaps', 'accents', 'tints')
+KEEP = ('name', 'w', 'h', 'palette', 'pixels', 'anchors', 'slot', 'anchor', 'pivot', 'layer', 'wornBy', 'swaps', 'variants', 'accentSwaps', 'accents', 'tints', 'frames', 'fps', 'sceneScale')
 
 
 def validate(kind, id_, s):
+    if kind == 'props':
+        assert s.get('frames'), f'{kind}/{id_}: no frames'
+        for i, f in enumerate(s['frames']):
+            assert len(f) == s['w'] * s['h'], f'{kind}/{id_}: frame {i + 1} pixel count does not match size'
+        assert len(s['palette']) <= len(CHARS), f'{kind}/{id_}: too many colours'
+        return
     assert len(s['pixels']) == s['w'] * s['h'], f'{kind}/{id_}: pixel count does not match size'
     assert len(s['palette']) <= len(CHARS), f'{kind}/{id_}: too many colours'
     if kind == 'pieces':
@@ -50,8 +57,8 @@ def validate(kind, id_, s):
 
 
 def load_docs(d):
-    sheet = {'version': 2, 'bodies': {}, 'weapons': {}, 'pieces': {}}
-    for kind in ('bodies', 'weapons', 'pieces'):
+    sheet = {'version': 2, 'bodies': {}, 'weapons': {}, 'pieces': {}, 'props': {}}
+    for kind in ('bodies', 'weapons', 'pieces', 'props'):
         folder = os.path.join(d, kind)
         for f in sorted(os.listdir(folder)) if os.path.isdir(folder) else []:
             if not f.endswith('.json'):
@@ -100,7 +107,7 @@ def main():
         sheet = load_docs(sys.argv[1])
         with open(SHEET, 'w') as f:
             json.dump(sheet, f, indent=1, sort_keys=False)
-        print(f"wrote sprites.json: {len(sheet['bodies'])} bodies, {len(sheet['pieces'])} pieces")
+        print(f"wrote sprites.json: {len(sheet['bodies'])} bodies, {len(sheet['weapons'])} weapons, {len(sheet['pieces'])} pieces, {len(sheet['props'])} props")
     sheet = json.load(open(SHEET))
     for cls, name in FILES.items():
         composite(sheet, cls).save(os.path.join(ROOT, 'assets/sprites', name + '.png'))

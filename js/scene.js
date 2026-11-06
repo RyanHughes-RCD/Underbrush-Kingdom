@@ -3,11 +3,12 @@
 // scaled up by a whole number so the pixel art stays crisp.
 
 import { mulberry32 } from './game.js';
-import { PAD } from './sprites.js';
+import { PAD, propArt } from './sprites.js';
 
 const SCENE_H = 160;         // logical pixels tall
 const TARGET_W = 190;        // roughly how many logical pixels wide
 const WALK_SPEED = 11;       // logical px per second
+const FIRE_CLEARANCE = 18;   // fighters keep this far from the campfire
 
 const GRASS = ['#4f8a3a', '#55913e', '#4a8336', '#5a9642'];
 const TUFT_LIGHT = '#6dab4c';
@@ -145,10 +146,36 @@ export class CampScene {
     return d <= 1 ? { x, y } : { x: cx + (dx / d) * rx, y: cy + (dy / d) * ry };
   }
 
-  randomSpot() {
+  // The campfire sits in the middle of the clearing.
+  fireSpot() { const { cx, cy } = this.clearing(); return { x: cx, y: cy + 4 }; }
+
+  // How close (in logical px, with height counted double) a point is to the fire.
+  fireDistance(x, y) { const f = this.fireSpot(); return Math.hypot(x - f.x, (y - f.y) * 2); }
+
+  /**
+   * A random spot in the clearing, away from the campfire. With `from`, the
+   * straight walk there also has to stay clear of the fire.
+   */
+  randomSpot(from = null) {
     const { cx, cy, rx, ry } = this.clearing();
-    const a = this.rng() * Math.PI * 2, r = Math.sqrt(this.rng());
-    return { x: cx + Math.cos(a) * rx * r, y: cy + Math.sin(a) * ry * r };
+    let best = null;
+    for (let tries = 0; tries < 16; tries++) {
+      const a = this.rng() * Math.PI * 2, r = Math.sqrt(this.rng());
+      const p = { x: cx + Math.cos(a) * rx * r, y: cy + Math.sin(a) * ry * r };
+      best = p;
+      if (this.fireDistance(p.x, p.y) < FIRE_CLEARANCE) continue;
+      if (from && !this.pathClear(from, p)) continue;
+      return p;
+    }
+    return best;
+  }
+
+  pathClear(a, b) {
+    for (let i = 1; i <= 10; i++) {
+      const t = i / 10;
+      if (this.fireDistance(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t) < FIRE_CLEARANCE - 2) return false;
+    }
+    return true;
   }
 
   build() {
@@ -255,7 +282,7 @@ export class CampScene {
         w.moving = false;
         w.phase += dt * 3;
         if (w.wait <= 0) {
-          const p = this.randomSpot();
+          const p = this.randomSpot(w);
           w.tx = p.x; w.ty = p.y;
         }
         continue;
@@ -275,19 +302,34 @@ export class CampScene {
     }
   }
 
-  draw() {
+  draw(t = 0) {
     const { ctx, scale: s } = this;
     if (!this.bg) return;
     ctx.imageSmoothingEnabled = false;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.drawImage(this.bg, 0, 0, this.W * s, SCENE_H * s);
 
+    const fire = propArt('campfire');
+    const fireAt = this.fireSpot();
+    const fireFrame = fire ? Math.floor(t * fire.fps) % fire.frames.length : 0;
+    if (fire) this.drawGlow(fireAt, t, fireFrame);
+
     const things = [
-      ...this.trees.map((t) => ({ y: t.y, tree: t })),
+      ...this.trees.map((tr) => ({ y: tr.y, tree: tr })),
       ...[...this.walkers.values()].map((w) => ({ y: w.y, walker: w })),
+      ...(fire ? [{ y: fireAt.y, fire: true }] : []),
     ].sort((a, b) => a.y - b.y);
 
     for (const th of things) {
+      if (th.fire) {
+        // Drawn at its own pixel density: sceneScale 0.5 means each campfire
+        // pixel is half a camp pixel, so it sits at a sensible size beside
+        // the fighters. Rounded to whole device pixels to stay crisp.
+        const px = Math.max(1, Math.round(s * fire.sceneScale));
+        const fw = fire.w * px, fh = fire.h * px;
+        ctx.drawImage(fire.frames[fireFrame], Math.round(fireAt.x * s - fw / 2), Math.round(fireAt.y * s - fh), fw, fh);
+        continue;
+      }
       if (th.tree) {
         const t = th.tree;
         ctx.drawImage(t.t.canvas, (t.x - t.t.w / 2) * s, (t.y - t.t.h) * s, t.t.w * s, t.t.h * s);
@@ -314,6 +356,22 @@ export class CampScene {
       ctx.drawImage(art.canvas, -(PAD + art.w / 2), -(PAD + art.h) + 1);
       ctx.restore();
     }
+  }
+
+  // A warm, flickering pool of light around the campfire, in a few stepped
+  // rings so it stays in keeping with the pixel art.
+  drawGlow(at, t, frame) {
+    const { ctx, scale: s } = this;
+    const flicker = 1 + 0.06 * Math.sin(t * 7.3) + 0.03 * Math.sin(t * 13.1 + frame);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const [r, a] of [[30, 0.05], [21, 0.06], [13, 0.07]]) {
+      ctx.fillStyle = `rgba(255, 150, 60, ${a})`;
+      ctx.beginPath();
+      ctx.ellipse(Math.round(at.x * s), Math.round((at.y - 2) * s), r * flicker * s, r * 0.55 * flicker * s, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
   }
 
   handleTap(ev) {

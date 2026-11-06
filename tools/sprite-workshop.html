@@ -233,14 +233,14 @@ for (const [fam, list] of Object.entries(FAMILIES)) list.forEach(([id, name, d, 
 const cap = (x) => x[0].toUpperCase() + x.slice(1);
 const ANCHOR_NAMES = ['hand', 'offhand', 'head', 'chest', 'back'];
 const SLOTS = ['head', 'body', 'back', 'offhand', 'weapon', 'other'];
-const KINDS = ['bodies', 'weapons', 'pieces'];
+const KINDS = ['bodies', 'weapons', 'pieces', 'props'];
 const anchorColor = (n) => getComputedStyle(document.documentElement).getPropertyValue(`--a-${ANCHOR_NAMES.includes(n) ? n : 'other'}`).trim();
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 // ---------- State ----------
-let sheet = { version: 2, bodies: {}, weapons: {}, pieces: {} };
+let sheet = { version: 2, bodies: {}, weapons: {}, pieces: {}, props: {} };
 let sel = null;                 // {kind, id} — weapons also carry {mat, acc}
 let tool = 'pencil';
 let color = 0;                  // palette index; -1 = transparent
@@ -265,8 +265,21 @@ const ownDesign = (s = sel) => isWeapon(s) && !!variantOf(doc(s), s.mat)?.pixels
 // a material's own design.
 function cur(s = sel) {
   const d = doc(s); if (!d) return null;
+  if (s.kind === 'props') return frameView(d, s.frame || 0);
   return isWeapon(s) && ownDesign(s) ? d.variants[s.mat] : d;
 }
+// An animated prop shares its size and palette across frames; drawing tools
+// see one frame at a time through this view.
+function frameView(d, f) {
+  return {
+    get name() { return d.name; }, set name(v) { d.name = v; },
+    get w() { return d.w; }, set w(v) { d.w = v; },
+    get h() { return d.h; }, set h(v) { d.h = v; },
+    get palette() { return d.palette; }, set palette(v) { d.palette = v; },
+    get pixels() { return d.frames[f]; }, set pixels(v) { d.frames[f] = v; },
+  };
+}
+const isProp = (s = sel) => s?.kind === 'props';
 
 // ---------- Weapon colours (same rules as js/sprites.js) ----------
 // Each colour of a weapon is fixed, follows the main material (`swaps`) or
@@ -438,6 +451,7 @@ function renderShelf() {
   el.innerHTML = `
     <div class="shelf-group"><h2>Bodies</h2><div class="shelf-items">${bodies.map((id) => item('bodies', id, sheet.bodies[id].name || id, `${sheet.bodies[id].w}×${sheet.bodies[id].h}`)).join('')}</div></div>
     <div class="shelf-group"><h2>Weapons</h2><div class="shelf-items">${weaponGroups}</div></div>
+    <div class="shelf-group"><h2>Props</h2><div class="shelf-items">${Object.keys(sheet.props || {}).map((id) => item('props', id, sheet.props[id].name || id, `${sheet.props[id].frames.length} frames · ${sheet.props[id].w}×${sheet.props[id].h}`)).join('') || '<span class="hint">Animated scenery like the campfire.</span>'}</div></div>
     <div class="shelf-group"><h2>Gear</h2><div class="shelf-items">${pieces.map((id) => item('pieces', id, sheet.pieces[id].name || id, `${id} · ${sheet.pieces[id].w}×${sheet.pieces[id].h}`)).join('') || '<span class="hint">Armour, hats and other worn pieces.</span>'}</div></div>
     <button class="btn sm" id="btn-new">New gear piece</button>
     ${ui.newOpen ? newForm() : ''}`;
@@ -451,6 +465,7 @@ function renderShelfThumbs() {
       const mine = isWeapon() && sel.id === id;
       sp = weaponSprite(id, mine ? sel.mat : (lastMat[id] || FAMILIES[WEAPON_TYPES[id].family][0][0]), mine ? sel.acc : (lastAcc[id] || FAMILIES[WEAPON_TYPES[id].accent][0][0]));
     }
+    else if (kind === 'props') sp = frameView(sheet.props[id], 0);
     else sp = sheet[kind][id];
     if (sp) thumb(b.querySelector('canvas'), sp);
   });
@@ -471,7 +486,8 @@ function drawBoard() {
   const sp = cur(); const c = $('#board'); const ctx = c.getContext('2d');
   if (!sp) { $('#board-title').textContent = '—'; c.width = c.height = 10; return; }
   const d = doc();
-  $('#board-title').textContent = isWeapon() ? `${MATERIALS[sel.mat].name} ${d.name || WEAPON_TYPES[sel.id].name} · ${MATERIALS[sel.acc].name} fittings` : (sp.name || sel.id);
+  $('#board-title').textContent = isWeapon() ? `${MATERIALS[sel.mat].name} ${d.name || WEAPON_TYPES[sel.id].name} · ${MATERIALS[sel.acc].name} fittings`
+    : isProp() ? `${d.name || sel.id} · frame ${sel.frame + 1} of ${d.frames.length}` : (sp.name || sel.id);
   const wrap = $('#board-wrap');
   const avail = Math.max(200, wrap.clientWidth - 26);
   boardZoom = Math.max(6, Math.min(24, Math.floor(Math.min(avail, 640) / Math.max(sp.w, sp.h))));
@@ -489,6 +505,12 @@ function drawBoard() {
     }
   }
   ctx.imageSmoothingEnabled = false;
+  // Onion skin: the previous frame, faintly, to line up the animation.
+  if (isProp() && ui.onion && d.frames.length > 1) {
+    ctx.globalAlpha = 0.3;
+    ctx.drawImage(spriteCanvas(frameView(d, (sel.frame - 1 + d.frames.length) % d.frames.length)), 0, 0, sp.w * z, sp.h * z);
+    ctx.globalAlpha = 1;
+  }
   ctx.drawImage(spriteCanvas(display()), 0, 0, sp.w * z, sp.h * z);
   if ($('#opt-grid').checked && z >= 6) {
     ctx.strokeStyle = 'rgba(239,227,194,0.09)'; ctx.lineWidth = 1; ctx.beginPath();
@@ -566,6 +588,27 @@ function renderProps() {
         <span class="row" style="gap:4px"><button class="btn sm ${n === activeAnchor && tool === 'anchor' ? 'on' : ''}" data-place="${esc(n)}">Place</button><button class="btn sm danger" data-unanchor="${esc(n)}" title="Remove anchor">×</button></span></div>`).join('')}
       <form class="row" id="add-anchor"><input class="txt" id="aa-name" placeholder="new anchor, e.g. tail" pattern="[a-z][a-z0-9-]{0,19}" style="flex:1" list="anchor-names"><button class="btn sm">Add</button></form>
       <datalist id="anchor-names">${ANCHOR_NAMES.filter((n) => !sp.anchors?.[n]).map((n) => `<option value="${n}">`).join('')}</datalist>`;
+  } else if (isProp()) {
+    const d = doc(), n = d.frames.length;
+    el.innerHTML = `
+      <h2>Prop · ${esc(sel.id)}</h2>
+      <label class="field">Name<input id="pr-name" value="${esc(d.name || '')}" maxlength="40"></label>
+      ${sizeRow('Resizing applies to every frame and keeps the bottom centre in place.')}
+      <hr>
+      <h2>Frames</h2>
+      <div class="row" style="gap:6px">${d.frames.map((_, i) => `<button class="btn sm ${i === sel.frame ? 'on' : ''}" data-frame="${i}" title="Frame ${i + 1} (, and . to step)">${i + 1}</button>`).join('')}</div>
+      <div class="row">
+        <button class="btn sm" id="fr-dup">Duplicate frame ${sel.frame + 1}</button>
+        <button class="btn sm" id="fr-left" ${sel.frame === 0 ? 'disabled' : ''}>Move earlier</button>
+        <button class="btn sm" id="fr-right" ${sel.frame === n - 1 ? 'disabled' : ''}>Move later</button>
+        ${n > 1 ? (ui.confirmDelete ? `<span class="confirm">Delete frame ${sel.frame + 1}? <button class="btn sm danger" id="fr-del-yes">Delete</button><button class="btn sm" id="fr-del-no">Keep</button></span>` : `<button class="btn sm danger" id="fr-del">Delete frame…</button>`) : ''}
+      </div>
+      <label class="row" style="gap:6px;font-size:13px"><input type="checkbox" id="pr-onion" ${ui.onion ? 'checked' : ''}> Onion skin (show the previous frame faintly)</label>
+      <div class="row">
+        <label class="field">Speed (frames per second)<input type="number" id="pr-fps" min="1" max="24" value="${d.fps || 6}"></label>
+        <label class="field">Size in camp<select id="pr-scale">${[[0.5, 'Half (1 pixel = ½ camp pixel)'], [1, 'Full (1 pixel = 1 camp pixel)']].map(([v, t]) => `<option value="${v}" ${(d.sceneScale ?? 0.5) == v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+      </div>
+      <p class="hint">All frames share one palette and size. The fitting room plays the animation.</p>`;
   } else if (isWeapon()) {
     const d = doc(); const t = WEAPON_TYPES[sel.id]; const m = MATERIALS[sel.mat]; const kind = variantKind(sel.id, sel.mat);
     const anchorOpts = new Set([...ANCHOR_NAMES, ...Object.values(sheet.bodies).flatMap((b) => Object.keys(b.anchors || {}))]);
@@ -629,9 +672,14 @@ function renderProps() {
   }
   document.querySelectorAll('[data-tool]').forEach((b) => b.classList.toggle('on', b.dataset.tool === tool));
   $('#tool-anchor').textContent = sel.kind === 'bodies' ? 'Anchor' : 'Pivot';
+  $('#tool-anchor').disabled = isProp();
 }
 
 function renderPreviewControls() {
+  // A prop plays on its own; the fighter controls only apply to fighters.
+  for (const id of ['pv-bodies', 'pv-weapon', 'pv-mat', 'pv-acc', 'pv-squish', 'pv-random']) {
+    const el = $('#' + id); const box = el.closest('.row, label.field, .preview-controls') || el; box.hidden = isProp();
+  }
   $('#pv-bodies').innerHTML = Object.keys(sheet.bodies).map((c) => `<button class="btn sm ${c === pvBody ? 'on' : ''}" data-pv="${c}">${esc(sheet.bodies[c].name || c)}</button>`).join('');
   const types = Object.entries(WEAPON_TYPES).filter(([id, t]) => t.cls === pvBody && sheet.weapons[id]);
   if (pvEquip && WEAPON_TYPES[pvEquip.type]?.cls !== pvBody) pvEquip = null;
@@ -646,6 +694,14 @@ function renderPreviewControls() {
 const PV_SCALE = 4;
 function drawPreview(t) {
   const c = $('#preview'); const ctx = c.getContext('2d');
+  if (isProp() && doc()) {
+    // Play the prop's animation at 4x.
+    const d = doc(), f = Math.floor(t * (d.fps || 6)) % d.frames.length;
+    if (c.width !== d.w * PV_SCALE || c.height !== d.h * PV_SCALE) { c.width = d.w * PV_SCALE; c.height = d.h * PV_SCALE; c.style.width = `${d.w * PV_SCALE}px`; c.style.height = `${d.h * PV_SCALE}px`; }
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, c.width, c.height); ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(spriteCanvas(frameView(d, f)), 0, 0, c.width, c.height);
+    return;
+  }
   const body = sheet.bodies[pvBody]; if (!body) return;
   const W = body.w + PAD * 2, H = body.h + PAD * 2;
   if (c.width !== W * PV_SCALE) { c.width = W * PV_SCALE; c.height = H * PV_SCALE; c.style.width = `${W * PV_SCALE}px`; c.style.height = `${H * PV_SCALE}px`; }
@@ -777,6 +833,7 @@ document.addEventListener('click', (ev) => {
   if (t.matches('.shelf-item')) { select({ kind: t.dataset.kind, id: t.dataset.id }); return; }
   if (t.dataset.mat) { select({ ...sel, mat: t.dataset.mat }); return; }
   if (t.dataset.acc) { select({ ...sel, acc: t.dataset.acc }); return; }
+  if (t.dataset.frame !== undefined) { select({ ...sel, frame: Number(t.dataset.frame) }); return; }
   if (t.dataset.tool) { tool = t.dataset.tool; renderProps(); drawBoard(); return; }
   if (t.dataset.color !== undefined) { color = Number(t.dataset.color); if (tool === 'eraser' && color >= 0) tool = 'pencil'; renderPalette(); renderProps(); return; }
   if (t.dataset.place) { tool = 'anchor'; if (t.dataset.place !== 'pivot') activeAnchor = t.dataset.place; renderProps(); drawBoard(); return; }
@@ -804,6 +861,14 @@ document.addEventListener('click', (ev) => {
     case 'btn-download': downloadJson(); break;
     case 'btn-send': sendToGame(); break;
     case 'btn-png': downloadPng(); break;
+    case 'fr-dup': if (canEdit()) { pushUndo(); const d = doc(); d.frames.splice(sel.frame + 1, 0, d.frames[sel.frame]); changed(); renderShelf(); select({ ...sel, frame: sel.frame + 1 }); } break;
+    case 'fr-left': case 'fr-right': if (canEdit()) {
+      const d = doc(), j = sel.frame + (t.id === 'fr-left' ? -1 : 1); pushUndo();
+      [d.frames[sel.frame], d.frames[j]] = [d.frames[j], d.frames[sel.frame]]; changed(); select({ ...sel, frame: j });
+    } break;
+    case 'fr-del': ui.confirmDelete = true; renderProps(); break;
+    case 'fr-del-no': ui.confirmDelete = false; renderProps(); break;
+    case 'fr-del-yes': if (canEdit()) { pushUndo(); const d = doc(); d.frames.splice(sel.frame, 1); ui.confirmDelete = false; changed(); renderShelf(); select({ ...sel, frame: Math.min(sel.frame, d.frames.length - 1) }); } break;
     case 'pv-random': {
       const near = Math.random() < 0.3;
       pvTint = { h: Math.round(near ? Math.random() * 40 - 20 : Math.random() * 360 - 180), s: Math.round((0.9 + Math.random() * 0.6) * 100) / 100, l: Math.round((0.9 + Math.random() * 0.2) * 100) / 100 };
@@ -821,6 +886,7 @@ document.addEventListener('change', (ev) => {
   if (t.id === 'pv-mat') { if (pvEquip) pvEquip = { ...pvEquip, material: t.value }; return; }
   if (t.id === 'pv-acc') { if (pvEquip) pvEquip = { ...pvEquip, accent: t.value }; return; }
   if (['opt-grid', 'opt-ghost'].includes(t.id)) { drawBoard(); return; }
+  if (t.id === 'pr-onion') { ui.onion = t.checked; drawBoard(); return; }
   if (t.id === 'file-json') { importJson(t.files[0]); t.value = ''; return; }
   const sp = cur(); if (!sp) return;
   if (t.id === 'file-png') { importPng(t.files[0]); t.value = ''; return; }
@@ -829,6 +895,8 @@ document.addEventListener('change', (ev) => {
   if (t.id === 'pal-role' && color >= 0) { pushUndo(); setRole(color, t.value); changed(); renderShelf(); return; }
   if (t.id === 'pr-name') { pushUndo(); doc().name = t.value.trim(); changed(); renderShelf(); renderPreviewControls(); return; }
   if (['pr-slot', 'pr-anchor', 'pr-layer'].includes(t.id)) { pushUndo(); doc()[t.id.slice(3)] = t.value; changed(); return; }
+  if (t.id === 'pr-fps') { pushUndo(); doc().fps = Math.max(1, Math.min(24, Number(t.value) || 6)); changed(); return; }
+  if (t.id === 'pr-scale') { pushUndo(); doc().sceneScale = Number(t.value); changed(); return; }
   if (t.dataset.worn) { pushUndo(); const s = new Set(sp.wornBy || []); t.checked ? s.add(t.dataset.worn) : s.delete(t.dataset.worn); sp.wornBy = [...s]; changed(); }
 });
 
@@ -861,6 +929,7 @@ document.addEventListener('keydown', (ev) => {
   const k = ev.key.toLowerCase();
   if ((ev.ctrlKey || ev.metaKey) && k === 'z') { ev.preventDefault(); ev.shiftKey ? redo() : undo(); return; }
   if ((ev.ctrlKey || ev.metaKey) && k === 'y') { ev.preventDefault(); redo(); return; }
+  if (isProp() && (k === ',' || k === '.')) { const n = doc().frames.length; select({ ...sel, frame: (sel.frame + (k === ',' ? n - 1 : 1)) % n }); return; }
   const map = { b: 'pencil', e: 'eraser', g: 'fill', i: 'picker', m: 'move', a: 'anchor' };
   if (map[k] && !ev.ctrlKey && !ev.metaKey) { tool = map[k]; renderProps(); drawBoard(); }
 });
@@ -875,7 +944,9 @@ function select(s) {
     lastMat[s.id] = s.mat; lastAcc[s.id] = s.acc;
     pvBody = WEAPON_TYPES[s.id].cls; pvEquip = { type: s.id, material: s.mat, accent: s.acc };
   }
-  sel = s; ui.confirmDelete = false; ui.confirmShared = false;
+  if (s.kind === 'props') s.frame = Math.max(0, Math.min((s.frame ?? 0), doc(s).frames.length - 1));
+  if (!(sel && s.kind === sel.kind && s.id === sel.id)) ui.confirmDelete = false;
+  sel = s; ui.confirmShared = false;
   const sp = cur();
   if (s.kind === 'bodies') { pvBody = s.id; if (!sp.anchors?.[activeAnchor]) activeAnchor = Object.keys(sp.anchors || {})[0] || 'hand'; }
   else if (s.kind === 'pieces' && sp.wornBy?.length) pvBody = sp.wornBy[0];
@@ -899,6 +970,14 @@ function mirror() {
   changed();
 }
 function tidyPalette() {
+  if (isProp()) {
+    const d = doc(); const used = [...new Set(d.frames.flatMap((f) => [...toIdx(frameView(d, d.frames.indexOf(f)))]))].filter((v) => v >= 0).sort((x, y) => x - y);
+    if (used.length === d.palette.length) { toast('Every colour is in use.'); return; }
+    pushUndo(); const remap = new Map(used.map((v, i) => [v, i]));
+    d.frames = d.frames.map((_, i) => fromIdx(toIdx(frameView(d, i)).map((v) => (v < 0 ? -1 : remap.get(v)))));
+    d.palette = used.map((v) => d.palette[v]);
+    color = Math.min(color, d.palette.length - 1); changed(); renderShelf(); return;
+  }
   const sp = cur(); const a = toIdx(sp); const used = [...new Set(a)].filter((v) => v >= 0).sort((x, y) => x - y);
   if (used.length === sp.palette.length) { toast('Every colour is in use.'); return; }
   pushUndo(); remapPalette(sp, new Map(used.map((v, i) => [v, i])));
@@ -907,6 +986,16 @@ function tidyPalette() {
 function resize(w, h) {
   w = Math.max(4, Math.min(64, w | 0)); h = Math.max(4, Math.min(64, h | 0));
   const sp = cur(); if (w === sp.w && h === sp.h) return; pushUndo();
+  if (isProp()) {
+    // Every frame, bottom-centre anchored.
+    const d = doc(), dx = Math.floor((w - d.w) / 2), dy = h - d.h;
+    d.frames = d.frames.map((_, i) => {
+      const a = toIdx(frameView(d, i)), out = new Int16Array(w * h).fill(-1);
+      for (let y = 0; y < d.h; y++) for (let x = 0; x < d.w; x++) { const nx = x + dx, ny = y + dy; if (nx >= 0 && ny >= 0 && nx < w && ny < h) out[ny * w + nx] = a[y * d.w + x]; }
+      return fromIdx(out);
+    });
+    d.w = w; d.h = h; changed(); renderShelf(); return;
+  }
   const a = toIdx(sp); const out = new Int16Array(w * h).fill(-1);
   // Bodies keep their feet: bottom-centre. Weapons and gear keep their centre.
   const dx = Math.floor((w - sp.w) / 2), dy = sel.kind === 'bodies' ? h - sp.h : Math.floor((h - sp.h) / 2);
@@ -948,6 +1037,15 @@ function importPng(file) {
       if (k >= CHARS.length) { toast(`That image has more than ${CHARS.length} colours. Reduce its palette and try again.`); return; }
       a[i] = k;
     }
+    if (isProp()) {
+      const d = doc();
+      if (c.width !== d.w || c.height !== d.h) { toast(`Frames are ${d.w}×${d.h}. Resize the prop or import a ${d.w}×${d.h} image.`); return; }
+      if (new Set([...d.palette, ...pal]).size > CHARS.length) { toast(`That would make more than ${CHARS.length} colours across the frames.`); return; }
+      pushUndo();
+      const merged = [...d.palette]; const map = pal.map((h) => { let k = merged.indexOf(h); if (k < 0) { k = merged.length; merged.push(h); } return k; });
+      d.palette = merged; d.frames[sel.frame] = fromIdx(a.map((v) => (v < 0 ? -1 : map[v])));
+      changed(); renderShelf(); toast(`Imported ${file.name} into frame ${sel.frame + 1}`); return;
+    }
     const sp = cur(); pushUndo();
     const ox = sel.kind === 'bodies' ? Math.floor((c.width - sp.w) / 2) : 0, oy = sel.kind === 'bodies' ? c.height - sp.h : 0;
     if (sp.anchors) for (const n of Object.keys(sp.anchors)) sp.anchors[n] = { x: sp.anchors[n].x + ox, y: sp.anchors[n].y + oy };
@@ -978,12 +1076,12 @@ async function importJson(file) {
     }
     history.clear(); loaded = true;
     select({ kind: 'bodies', id: Object.keys(sheet.bodies)[0] });
-    toast(`Loaded ${Object.keys(data.bodies).length} bodies, ${Object.keys(data.weapons).length} weapons and ${Object.keys(data.pieces).length} gear pieces`);
+    toast(`Loaded ${Object.keys(data.bodies).length} bodies, ${Object.keys(data.weapons).length} weapons, ${Object.keys(data.pieces).length} gear pieces and ${Object.keys(data.props).length} props`);
   } catch (e) { toast(`That isn't a sprites.json file (${e.message}).`); }
 }
 function exportSheet() {
   const sortObj = (o) => Object.fromEntries(Object.keys(o).sort().map((k) => [k, o[k]]));
-  return JSON.stringify({ version: 2, bodies: sortObj(sheet.bodies), weapons: sortObj(sheet.weapons), pieces: sortObj(sheet.pieces) }, null, 1);
+  return JSON.stringify({ version: 2, bodies: sortObj(sheet.bodies), weapons: sortObj(sheet.weapons), pieces: sortObj(sheet.pieces), props: sortObj(sheet.props || {}) }, null, 1);
 }
 async function save(filename, data) {
   const dl = await window.claude?.use?.('downloads');
@@ -993,7 +1091,7 @@ async function save(filename, data) {
 function downloadJson() { save('sprites.json', exportSheet()); }
 function downloadPng() {
   const sp = display(); if (!sp) return;
-  spriteCanvas(sp).toBlob((b) => save(`${isWeapon() ? `${sel.acc}-${sel.mat}-${sel.id}` : sel.id}.png`, b), 'image/png');
+  spriteCanvas(sp).toBlob((b) => save(`${isWeapon() ? `${sel.acc}-${sel.mat}-${sel.id}` : isProp() ? `${sel.id}-frame${sel.frame + 1}` : sel.id}.png`, b), 'image/png');
 }
 async function sendToGame() {
   if (!db) { toast('Not connected. Download sprites.json and add it to the repo instead.'); return; }
@@ -1008,7 +1106,7 @@ async function sendToGame() {
 
 // ---------- Boot ----------
 async function boot() {
-  try { const local = JSON.parse(localStorage.getItem('sprite-workshop-sheet') || 'null'); if (local?.bodies) sheet = { bodies: {}, weapons: {}, pieces: {}, ...local }; } catch {}
+  try { const local = JSON.parse(localStorage.getItem('sprite-workshop-sheet') || 'null'); if (local?.bodies) sheet = { bodies: {}, weapons: {}, pieces: {}, props: {}, ...local }; } catch {}
   db = await window.claude?.use?.('db');
   if (!db) {
     loaded = true;
@@ -1018,7 +1116,7 @@ async function boot() {
   const user = await window.claude.use('user');
   const w = user ? await user.can('data.write') : null;
   if (w === false) { canWrite = false; showBanner('You can look around, but only the owner and editors can change these sprites.'); }
-  sheet = { version: 2, bodies: {}, weapons: {}, pieces: {} };
+  sheet = { version: 2, bodies: {}, weapons: {}, pieces: {}, props: {} };
   const got = { bodies: false, weapons: false, pieces: false };
   const timer = setTimeout(() => { if (!loaded) setStatus("Can't reach the workshop yet", 'bad'); }, 10000);
   for (const kind of KINDS) {

@@ -87,7 +87,7 @@ Weapons have a base **attack** and **scaling** grades (S to E) for the stats the
 
 Each material has a **quality**, from ×1.0 at tier 1 to ×3.5 at tier 10. A weapon's quality is (2 × main + fittings) ÷ 3, and it multiplies both attack and scaling. Damage = quality × (attack + Σ scaling × the wielder's stat), so the same weapon hits harder as its fighter levels up. A fighter's **power** on expeditions combines damage, defensive stats and HP. All the numbers live in `js/data.js`, and the formulas are in `js/stats.js`.
 
-At the top of the Camp tab, any fighter not away on an expedition wanders a grassy clearing ringed by trees. They squish and stretch as they go. Tap one to open their details. The trees and grass are drawn in code, so there are no image files for them.
+At the top of the Camp tab, any fighter not away on an expedition wanders a grassy clearing ringed by trees, around a flickering campfire. They squish and stretch as they go. Tap one to open their details. The trees and grass are drawn in code, so there are no image files for them.
 
 ## Project layout
 
@@ -137,6 +137,7 @@ Character art is edited in the **[Sprite Workshop](https://claude.ai/artifact/SG
   - **design:** the material has its own drawing, for tiers that need more than a palette swap.
 
   Drawing on a material that uses the shared shape changes the shape for every material that doesn't have its own design.
+- **Props** are animated scenery, starting with the **campfire**. A prop has several frames that share one palette. You can step through them (`,` and `.`), duplicate, reorder or delete frames, turn on onion skin to see the previous frame faintly, and set the speed and size in camp. The fitting room plays the animation.
 - **Gear pieces** (armour, hats) and weapons say which anchor they attach to and which pixel is their **pivot**. The game draws each one so its pivot sits on the anchor, in front of or behind the body. Tick **Always worn by** to make a piece part of a class's default look, such as the beetle's armour. An equipped weapon replaces an always-worn piece in the weapon slot.
 - When you're happy with the art, press **Send to game**, then ask Claude to sync the sprites. You can also download `sprites.json` from the workshop and replace `assets/sprites/sprites.json` yourself.
 
