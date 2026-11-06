@@ -104,15 +104,15 @@ test('a creature tint only recolours the body colours marked to vary', () => {
   assert.deepEqual(tintPalette(['#ff0000'], [0], { h: 120, s: 1, l: 1 }), ['#00ff00']);
 });
 
-test('the campfire prop has three frames sharing one palette and size', async () => {
+test('the campfire prop has six frames sharing one palette and size', async () => {
   const { propFrame } = await import('../js/sprites.js');
   const p = sheet.props.campfire;
-  assert.equal(p.frames.length, 3);
+  assert.equal(p.frames.length, 6);
   for (let i = 0; i < p.frames.length; i++) {
     assert.equal(p.frames[i].length, p.w * p.h, `frame ${i}`);
     assert.equal(decode(propFrame(sheet, 'campfire', i)).length, p.w * p.h * 4);
   }
   assert.notEqual(p.frames[0], p.frames[1]);
-  assert.equal(propFrame(sheet, 'campfire', 4).pixels, p.frames[1]); // frames loop
+  assert.equal(propFrame(sheet, 'campfire', 7).pixels, p.frames[1]); // frames loop
   assert.equal(propFrame(sheet, 'nothing', 0), null);
 });
