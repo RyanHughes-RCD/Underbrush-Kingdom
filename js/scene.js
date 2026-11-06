@@ -15,8 +15,15 @@ const FIRE_CLEARANCE = 18;   // fighters keep this far from the campfire
 // ---------- Scene ----------
 
 export class CampScene {
-  constructor({ onTap } = {}) {
+  /**
+   * onTap(creatureId) when a fighter is tapped, onBuilding(workshopId) when a
+   * workshop is, and busy(workshopId) says whether a workshop is smelting.
+   */
+  constructor({ onTap, onBuilding, busy } = {}) {
     this.onTap = onTap;
+    this.onBuilding = onBuilding;
+    this.busy = busy || (() => false);
+    this.buildings = [];
     this.el = document.createElement('div');
     this.el.className = 'scene';
     this.canvas = document.createElement('canvas');
@@ -81,9 +88,16 @@ export class CampScene {
   // How close (in logical px, with height counted double) a point is to the fire.
   fireDistance(x, y) { const f = this.fireSpot(); return Math.hypot(x - f.x, (y - f.y) * 2); }
 
+  // Whether a fighter's feet at x, y would be in the fire or in (or just
+  // behind) a workshop. `slack` eases the margins for paths.
+  blocked(x, y, slack = 0) {
+    if (this.fireDistance(x, y) < FIRE_CLEARANCE - slack) return true;
+    return this.buildings.some((b) => Math.abs(x - b.x) < b.t.w / 2 + 6 - slack && y > b.y - b.t.h + 4 + slack && y < b.y + 5 - slack);
+  }
+
   /**
-   * A random spot in the clearing, away from the campfire. With `from`, the
-   * straight walk there also has to stay clear of the fire.
+   * A random spot in the clearing, away from the campfire and the workshops.
+   * With `from`, the straight walk there also has to stay clear of them.
    */
   randomSpot(from = null) {
     const { cx, cy, rx, ry } = this.clearing();
@@ -92,7 +106,7 @@ export class CampScene {
       const a = this.rng() * Math.PI * 2, r = Math.sqrt(this.rng());
       const p = { x: cx + Math.cos(a) * rx * r, y: cy + Math.sin(a) * ry * r };
       best = p;
-      if (this.fireDistance(p.x, p.y) < FIRE_CLEARANCE) continue;
+      if (this.blocked(p.x, p.y)) continue;
       if (from && !this.pathClear(from, p)) continue;
       return p;
     }
@@ -100,9 +114,9 @@ export class CampScene {
   }
 
   pathClear(a, b) {
-    for (let i = 1; i <= 10; i++) {
-      const t = i / 10;
-      if (this.fireDistance(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t) < FIRE_CLEARANCE - 2) return false;
+    for (let i = 1; i <= 20; i++) {
+      const t = i / 20;
+      if (this.blocked(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, 2)) return false;
     }
     return true;
   }
@@ -111,7 +125,8 @@ export class CampScene {
     const c = buildCourtyard(this.W, this.H, mulberry32(98765));
     this.bg = c.bg;
     this.front = c.front;
-    this.trees = c.objects;     // planters and anything else depth-sorted with fighters
+    this.trees = c.objects;     // planters and workshops, depth-sorted with fighters
+    this.buildings = c.buildings;
     this.torches = c.torches;
     this.walk = c.walk;
   }
@@ -234,6 +249,7 @@ export class CampScene {
       ctx.restore();
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+    for (const b of this.buildings) if (this.busy(b.id)) this.drawWork(b, t);
     if (this.front) ctx.drawImage(this.front, 0, 0, this.W * s, this.H * s);
     this.drawDaylight(light, t, fireAt, fireRect, fireFrame);
     const text = `${light.phase.name} · ${clockText(hour)}`;
@@ -291,6 +307,27 @@ export class CampScene {
       (this.torches || []).forEach((tc, i) => drawTorchFlame(ctx, s, t, tc.x, tc.y, i));
       ctx.restore();
     }
+    if (light.fire > 0.25) {
+      // Workshop windows, the furnace and the hut's crystal, glowing after
+      // dark (brighter while the workshop is busy).
+      const k = light.fire;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      this.buildings.forEach((bd, i) => {
+        const on = this.busy(bd.id) ? 1.4 : 1;
+        for (const l of bd.lights) {
+          const [r, g, b] = l.rgb, fl = 1 + 0.05 * Math.sin(t * 5 + i * 3 + l.x);
+          for (const [f, a] of [[1, 0.05], [0.6, 0.08]]) {
+            ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${a * k * on})`;
+            ctx.beginPath(); ctx.ellipse(l.x * s, l.y * s, l.r * f * fl * s, l.r * f * 0.75 * fl * s, 0, 0, Math.PI * 2); ctx.fill();
+          }
+          const [gw, gh] = l.glass;
+          ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${0.45 * k * on})`;
+          ctx.fillRect(Math.round(l.x - gw / 2) * s, Math.round(l.y - gh / 2) * s, gw * s, gh * s);
+        }
+      });
+      ctx.restore();
+    }
     if (light.fireflies) {
       const { cx, cy, rx, ry } = this.clearing();
       ctx.save();
@@ -325,6 +362,35 @@ export class CampScene {
     ctx.restore();
   }
 
+  // A busy workshop: smoke curling from the chimney, or for the hut,
+  // sparkles drifting up from its crystal.
+  drawWork(b, t) {
+    const { ctx, scale: s } = this;
+    const { x, y } = b.emit;
+    ctx.save();
+    if (b.effect === 'sparkle') {
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < 7; i++) {
+        const age = (t * 0.45 + i / 7) % 1;
+        const sx = Math.round(x + Math.sin(i * 2.3 + age * 5) * (3 + age * 5)), sy = Math.round(y - 1 - age * 18);
+        const a = (1 - age) * Math.max(0, Math.sin(t * 6 + i * 1.9) * 0.5 + 0.6);
+        ctx.fillStyle = i % 2 ? `rgba(214, 168, 255, ${a})` : `rgba(140, 235, 255, ${a})`;
+        ctx.fillRect(sx * s, sy * s, s, s);
+        if (a > 0.6) { ctx.fillStyle = `rgba(255, 255, 255, ${a * 0.35})`; ctx.fillRect((sx - 1) * s, sy * s, 3 * s, s); ctx.fillRect(sx * s, (sy - 1) * s, s, 3 * s); }
+      }
+    } else {
+      const dark = b.id === 'forge';
+      for (let i = 0; i < 6; i++) {
+        const age = (t * 0.35 + i / 6) % 1;
+        const r = 1 + Math.floor(age * 3);
+        const sx = Math.round(x + Math.sin(age * 4 + i) * 1.5 + age * 7 - r / 2), sy = Math.round(y - 2 - age * 24);
+        ctx.fillStyle = dark ? `rgba(92, 88, 84, ${Math.min(1, (1 - age) * 1.1)})` : `rgba(196, 190, 182, ${Math.min(1, (1 - age) * 1.1)})`;
+        ctx.fillRect(sx * s, sy * s, (r + 1) * s, r * s);
+      }
+    }
+    ctx.restore();
+  }
+
   handleTap(ev) {
     const rect = this.canvas.getBoundingClientRect();
     const x = ((ev.clientX - rect.left) / rect.width) * this.W;
@@ -332,6 +398,8 @@ export class CampScene {
     const hit = [...this.walkers.values()]
       .sort((a, b) => b.y - a.y)
       .find((w) => Math.abs(x - w.x) < 12 && y < w.y + 2 && y > w.y - 28);
-    if (hit && this.onTap) this.onTap(hit.id);
+    if (hit) { if (this.onTap) this.onTap(hit.id); return; }
+    const shop = this.buildings.find((b) => Math.abs(x - b.x) < b.t.w / 2 && y > b.y - b.t.h && y < b.y + 2);
+    if (shop && this.onBuilding) this.onBuilding(shop.id);
   }
 }

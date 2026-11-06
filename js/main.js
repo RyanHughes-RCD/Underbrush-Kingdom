@@ -145,7 +145,25 @@ function awayNote() {
   return away ? `<p class="hint scene-note">${away} fighter${away > 1 ? 's are' : ' is'} out on an expedition.</p>` : '';
 }
 
-const scene = new CampScene({ onTap: (id) => openCreature(id) });
+const scene = new CampScene({
+  onTap: (id) => openCreature(id),
+  onBuilding: (id) => openWorkshop(id),
+  busy: (id) => G.workshopJobs(state, id).length > 0,
+});
+
+// Tapping a workshop in the courtyard: over to the Workshops tab, scrolled to
+// that workshop's card, which flashes briefly.
+function openWorkshop(id) {
+  ui.tab = 'workshops';
+  ui.campPanel = false;
+  render();
+  const card = document.getElementById(`ws-${id}`);
+  if (!card) return;
+  view.scrollTop = 0;
+  card.scrollIntoView({ block: 'start' });
+  card.classList.add('flash');
+  setTimeout(() => card.classList.remove('flash'), 1200);
+}
 
 function mountScene() {
   const slot = document.getElementById('scene-slot');
@@ -365,7 +383,7 @@ function renderWorkshops() {
       const types = CLASSES[ws.cls].weapons.map((t) => WEAPONS[t]);
       const seen = new Set(state.discovered || []);
       return `
-      <div class="card">
+      <div class="card" id="ws-${ws.id}">
         <h3>${esc(ws.name)}</h3>
         <p>${esc(ws.blurb)}</p>
 

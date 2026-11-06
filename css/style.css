@@ -64,6 +64,10 @@ button { font-family: inherit; font-size: inherit; color: inherit; }
   margin-bottom: 12px;
 }
 .card h3 { margin: 0 0 4px; font-size: 17px; font-weight: 600; }
+/* A workshop card flashes when you arrive from its building in camp. */
+.card[id^="ws-"] { scroll-margin-top: 12px; }
+.card.flash { animation: card-flash 1.2s ease-out; }
+@keyframes card-flash { 0%, 30% { box-shadow: 0 0 0 3px var(--accent, #e0842e); } 100% { box-shadow: 0 0 0 0 transparent; } }
 .card p { margin: 4px 0; font-size: 14px; color: var(--ink-soft); }
 .row { display: flex; align-items: center; gap: 10px; }
 .row.wrap { flex-wrap: wrap; }
